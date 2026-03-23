@@ -27,24 +27,19 @@ class Cnpj implements ValidationRule
         // First check digit
         $sum = 0;
         for ($i = 0; $i < 12; $i++) {
-            $sum += $cnpj[$i] * $weights1[$i];
+            $sum += (int) $cnpj[$i] * $weights1[$i];
         }
         $digit1 = ($sum % 11) < 2 ? 0 : 11 - ($sum % 11);
-
-        if ((int) $cnpj[12] !== $digit1) {
-            $fail('O CNPJ informado é inválido.');
-            return;
-        }
 
         // Second check digit
         $sum = 0;
         for ($i = 0; $i < 13; $i++) {
-            $sum += $cnpj[$i] * $weights2[$i];
+            $sum += (int) $cnpj[$i] * $weights2[$i];
         }
         $digit2 = ($sum % 11) < 2 ? 0 : 11 - ($sum % 11);
 
-        if ((int) $cnpj[13] !== $digit2) {
-            $fail('O CNPJ informado é inválido.');
+        if ((int) $cnpj[12] !== $digit1 || (int) $cnpj[13] !== $digit2) {
+            $fail('O CNPJ informado é inválido. Dígitos verificadores incorretos. Ex válido: 11.222.333/0001-81');
             return;
         }
     }
