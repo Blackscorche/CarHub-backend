@@ -19,7 +19,7 @@ class AuditLogMiddleware
                 'action' => $request->method() . ' ' . $request->path(),
                 'entity_type' => $this->guessEntityType($request->path()),
                 'entity_id' => $request->route('id') ?? $request->route('vehicle') ?? null,
-                'new_value' => $request->except(['password', 'password_confirmation']),
+                'new_value' => $request->except(['password', 'password_confirmation', 'image', 'media', 'cover_image', 'logo', 'evidence', 'photo']),
                 'ip_address' => $request->ip(),
             ]);
         }

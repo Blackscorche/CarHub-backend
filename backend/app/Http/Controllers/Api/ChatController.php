@@ -1,0 +1,97 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\ChatMessage;
+use App\Models\Order;
+use App\Traits\ApiResponse;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+
+class ChatController extends Controller
+{
+    use ApiResponse;
+
+    public function index(Request $request, Order $order): JsonResponse
+    {
+        $this->authorizeOrderAccess($request, $order);
+
+        $messages = ChatMessage::where('order_id', $order->id)
+            ->with('sender:id,name,avatar_url')
+            ->orderByDesc('created_at')
+            ->paginate($request->input('limit', 50));
+
+        // Mark unread messages as read
+        ChatMessage::where('order_id', $order->id)
+            ->where('sender_id', '!=', $request->user()->id)
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return $this->success($messages);
+    }
+
+    public function store(Request $request, Order $order): JsonResponse
+    {
+        $request->validate([
+            'message' => 'required|string|max:2000',
+        ]);
+
+        $this->authorizeOrderAccess($request, $order);
+
+        $message = ChatMessage::create([
+            'order_id' => $order->id,
+            'sender_id' => $request->user()->id,
+            'message' => $request->input('message'),
+            'type' => 'text',
+        ]);
+
+        $message->load('sender:id,name,avatar_url');
+
+        broadcast(new \App\Events\NewChatMessage($message))->toOthers();
+
+        return $this->created($message);
+    }
+
+    public function sendImage(Request $request, Order $order): JsonResponse
+    {
+        $request->validate([
+            'image' => 'required|file|mimes:jpg,jpeg,png|max:5120',
+        ]);
+
+        $this->authorizeOrderAccess($request, $order);
+
+        $path = $request->file('image')->store('chat/' . $order->id, 'public');
+
+        $message = ChatMessage::create([
+            'order_id' => $order->id,
+            'sender_id' => $request->user()->id,
+            'message' => '',
+            'media_url' => Storage::url($path),
+            'type' => 'image',
+        ]);
+
+        $message->load('sender:id,name,avatar_url');
+
+        broadcast(new \App\Events\NewChatMessage($message))->toOthers();
+
+        return $this->created($message);
+    }
+
+    protected function authorizeOrderAccess(Request $request, Order $order): void
+    {
+        $user = $request->user();
+
+        if ($user->role === 'customer' && $order->customer_id !== $user->id) {
+            abort(403, 'Acesso negado.');
+        }
+
+        if ($user->role === 'supplier') {
+            $supplier = $user->supplier;
+            if (! $supplier || $order->supplier_id !== $supplier->id) {
+                abort(403, 'Acesso negado.');
+            }
+        }
+    }
+}

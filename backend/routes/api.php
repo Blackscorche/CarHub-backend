@@ -3,11 +3,19 @@
 use App\Http\Controllers\Api\AddressController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CatalogItemController;
+use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\CouponController;
+use App\Http\Controllers\Api\DeliveryController;
+use App\Http\Controllers\Api\DisputeController;
+use App\Http\Controllers\Api\InsuranceClaimController;
+use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\LegalController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\QuoteController;
+use App\Http\Controllers\Api\ReviewController;
+use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\VehicleController;
 use Illuminate\Support\Facades\Route;
@@ -16,20 +24,15 @@ use Illuminate\Support\Facades\Route;
 Route::get('/health', function () {
     return response()->json([
         'success' => true,
-        'data' => [
-            'status' => 'ok',
-            'timestamp' => now()->toIso8601String(),
-        ],
+        'data' => ['status' => 'ok', 'timestamp' => now()->toIso8601String()],
         'message' => 'CarHub API is running.',
     ]);
 });
 
 // Auth (public)
 Route::prefix('auth')->group(function () {
-    Route::post('/register', [AuthController::class, 'register'])
-        ->middleware('throttle:5,1');
-    Route::post('/login', [AuthController::class, 'login'])
-        ->middleware('throttle:5,1');
+    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 });
@@ -39,6 +42,12 @@ Route::get('/suppliers', [SupplierController::class, 'index']);
 Route::get('/suppliers/nearby', [SupplierController::class, 'nearby']);
 Route::get('/suppliers/{supplier}', [SupplierController::class, 'show']);
 Route::get('/suppliers/{supplier}/catalog', [CatalogItemController::class, 'index']);
+Route::get('/suppliers/{supplier}/reviews', [ReviewController::class, 'supplierReviews']);
+Route::get('/suppliers/{supplier}/availability', [ScheduleController::class, 'availability']);
+
+// Legal (public)
+Route::get('/legal/terms', [LegalController::class, 'terms']);
+Route::get('/legal/privacy', [LegalController::class, 'privacy']);
 
 // Payment webhook (public, no auth)
 Route::post('/payments/webhook', [PaymentController::class, 'webhook']);
@@ -54,6 +63,7 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
     Route::put('/profile', [ProfileController::class, 'update']);
     Route::post('/profile/avatar', [ProfileController::class, 'uploadAvatar']);
     Route::put('/profile/expo-push-token', [ProfileController::class, 'updatePushToken']);
+    Route::post('/profile/delete-request', [LegalController::class, 'deleteRequest']);
 
     // Addresses
     Route::apiResource('addresses', AddressController::class);
@@ -85,13 +95,11 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel']);
 
-    // Order creation (customer only)
     Route::middleware('role:customer')->group(function () {
         Route::post('/orders', [OrderController::class, 'store']);
         Route::put('/orders/{order}/confirm', [OrderController::class, 'confirm']);
     });
 
-    // Order supplier actions
     Route::middleware(['role:supplier', 'approved'])->group(function () {
         Route::put('/orders/{order}/accept', [OrderController::class, 'accept']);
         Route::put('/orders/{order}/reject', [OrderController::class, 'reject']);
@@ -122,9 +130,64 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
         Route::put('/quotes/{quote}/adjust', [QuoteController::class, 'adjust']);
     });
 
+    // Chat
+    Route::get('/chat/{order}/messages', [ChatController::class, 'index']);
+    Route::post('/chat/{order}/messages', [ChatController::class, 'store']);
+    Route::post('/chat/{order}/images', [ChatController::class, 'sendImage']);
+
+    // Deliveries
+    Route::get('/deliveries/{order}', [DeliveryController::class, 'show']);
+    Route::middleware(['role:supplier', 'approved'])->group(function () {
+        Route::post('/deliveries', [DeliveryController::class, 'store']);
+        Route::put('/deliveries/{delivery}/status', [DeliveryController::class, 'updateStatus']);
+        Route::put('/deliveries/{delivery}/location', [DeliveryController::class, 'updateLocation']);
+        Route::post('/deliveries/{delivery}/photo', [DeliveryController::class, 'uploadPhoto']);
+    });
+
+    // Reviews
+    Route::middleware('role:customer')->group(function () {
+        Route::post('/reviews', [ReviewController::class, 'store']);
+    });
+
+    // Disputes
+    Route::get('/disputes', [DisputeController::class, 'index']);
+    Route::get('/disputes/{dispute}', [DisputeController::class, 'show']);
+    Route::post('/disputes', [DisputeController::class, 'store']);
+    Route::middleware('role:admin')->group(function () {
+        Route::put('/disputes/{dispute}/resolve', [DisputeController::class, 'resolve']);
+    });
+
+    // Schedules
+    Route::get('/schedules', [ScheduleController::class, 'index']);
+    Route::middleware('role:customer')->group(function () {
+        Route::post('/schedules', [ScheduleController::class, 'store']);
+    });
+    Route::put('/schedules/{schedule}/cancel', [ScheduleController::class, 'cancel']);
+
+    // Invoices
+    Route::get('/orders/{order}/invoice', [InvoiceController::class, 'download']);
+    Route::middleware(['role:supplier', 'approved'])->group(function () {
+        Route::post('/orders/{order}/invoice', [InvoiceController::class, 'upload']);
+    });
+
     // Coupons
     Route::post('/coupons/validate', [CouponController::class, 'validate']);
 
     // Cashback
     Route::get('/cashback', [CouponController::class, 'cashbackWallet']);
+
+    // Insurance Claims
+    Route::get('/insurance-claims', [InsuranceClaimController::class, 'index']);
+    Route::get('/insurance-claims/{claim}', [InsuranceClaimController::class, 'show']);
+    Route::get('/insurance-claims/{claim}/protocol', [InsuranceClaimController::class, 'downloadProtocol']);
+
+    Route::middleware('role:customer')->group(function () {
+        Route::post('/insurance-claims', [InsuranceClaimController::class, 'store']);
+        Route::put('/insurance-claims/{claim}/submit', [InsuranceClaimController::class, 'submit']);
+    });
+
+    Route::middleware('role:admin')->group(function () {
+        Route::put('/insurance-claims/{claim}/send', [InsuranceClaimController::class, 'sendToInsurer']);
+        Route::put('/insurance-claims/{claim}/status', [InsuranceClaimController::class, 'updateStatus']);
+    });
 });

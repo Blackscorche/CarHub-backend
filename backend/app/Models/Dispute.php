@@ -32,4 +32,9 @@ class Dispute extends Model
     {
         return $this->belongsTo(User::class, 'opened_by');
     }
+
+    public function openedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'opened_by');
+    }
 }
