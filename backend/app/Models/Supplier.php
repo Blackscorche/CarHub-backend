@@ -1,0 +1,93 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
+
+class Supplier extends Model
+{
+    use HasUuids;
+
+    protected $fillable = [
+        'user_id', 'business_name', 'cnpj', 'description',
+        'cover_image_url', 'logo_url', 'category', 'categories',
+        'service_radius_km', 'address_id', 'latitude', 'longitude',
+        'opening_hours', 'avg_rating', 'total_ratings',
+        'is_verified', 'kyc_document_url', 'approval_status',
+        'approved_at', 'payment_gateway_id', 'insurance_partners',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'categories' => 'array',
+            'opening_hours' => 'array',
+            'insurance_partners' => 'array',
+            'latitude' => 'decimal:7',
+            'longitude' => 'decimal:7',
+            'avg_rating' => 'decimal:1',
+            'is_verified' => 'boolean',
+            'approved_at' => 'datetime',
+        ];
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function address(): BelongsTo
+    {
+        return $this->belongsTo(Address::class);
+    }
+
+    public function catalogItems(): HasMany
+    {
+        return $this->hasMany(CatalogItem::class);
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    public function schedules(): HasMany
+    {
+        return $this->hasMany(Schedule::class);
+    }
+
+    public function insuranceTags(): HasMany
+    {
+        return $this->hasMany(SupplierInsuranceTag::class);
+    }
+
+    public function scopeNearby(Builder $query, float $lat, float $lng, float $radiusKm = 50): Builder
+    {
+        $haversine = "(6371 * acos(cos(radians(?)) * cos(radians(latitude))
+            * cos(radians(longitude) - radians(?)) + sin(radians(?))
+            * sin(radians(latitude))))";
+
+        return $query
+            ->select('suppliers.*')
+            ->selectRaw("{$haversine} AS distance", [$lat, $lng, $lat])
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->havingRaw("distance < ?", [$radiusKm])
+            ->orderBy('distance');
+    }
+
+    public function scopeApproved(Builder $query): Builder
+    {
+        return $query->where('approval_status', 'approved');
+    }
+}
