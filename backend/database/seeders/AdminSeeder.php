@@ -16,7 +16,7 @@ class AdminSeeder extends Seeder
             [
                 'id' => Str::uuid(),
                 'name' => 'Admin CarHub',
-                'password' => Hash::make('admin123!@#'),
+                'password' => 'admin123!@#',
                 'role' => 'admin',
                 'phone' => '+5511999999999',
                 'status' => 'active',
