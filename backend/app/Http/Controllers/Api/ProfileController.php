@@ -13,7 +13,7 @@ class ProfileController extends Controller
 
     public function show(Request $request): JsonResponse
     {
-        $user = $request->user()->load(['supplier', 'addresses', 'vehicles']);
+        $user = $request->user()->load(['supplier.address', 'addresses', 'vehicles']);
 
         return $this->success($user);
     }

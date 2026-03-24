@@ -154,7 +154,39 @@ class SupplierController extends Controller
             'latitude' => 'sometimes|numeric|between:-90,90',
             'longitude' => 'sometimes|numeric|between:-180,180',
             'insurance_partners' => 'sometimes|array',
+            // Address fields
+            'address' => 'sometimes|array',
+            'address.street' => 'required_with:address|string',
+            'address.number' => 'required_with:address|string',
+            'address.complement' => 'nullable|string',
+            'address.neighborhood' => 'required_with:address|string',
+            'address.city' => 'required_with:address|string',
+            'address.state' => 'required_with:address|string|size:2',
+            'address.zip_code' => 'required_with:address|string',
+            'address.latitude' => 'nullable|numeric|between:-90,90',
+            'address.longitude' => 'nullable|numeric|between:-180,180',
         ]);
+
+        // Handle address update
+        if ($request->filled('address')) {
+            $addressData = $validated['address'];
+            $user = $request->user();
+
+            if ($supplier->address_id) {
+                $supplier->address->update($addressData);
+            } else {
+                $address = $user->addresses()->create($addressData);
+                $validated['address_id'] = $address->id;
+            }
+
+            // Sync lat/lng from address to supplier for nearby search
+            if (! empty($addressData['latitude']) && ! empty($addressData['longitude'])) {
+                $validated['latitude'] = $addressData['latitude'];
+                $validated['longitude'] = $addressData['longitude'];
+            }
+
+            unset($validated['address']);
+        }
 
         $supplier->update($validated);
 

@@ -14,6 +14,59 @@ class ChatController extends Controller
 {
     use ApiResponse;
 
+    public function rooms(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $query = Order::query()->with(['customer:id,name,avatar_url', 'supplier.user:id,name,avatar_url']);
+
+        if ($user->role === 'customer') {
+            $query->where('customer_id', $user->id);
+        } elseif ($user->role === 'supplier') {
+            $supplier = $user->supplier;
+            if (! $supplier) {
+                return $this->success([]);
+            }
+            $query->where('supplier_id', $supplier->id);
+        }
+
+        // Only include orders that have at least one chat message
+        $query->whereHas('chatMessages');
+
+        $orders = $query->orderByDesc(
+            ChatMessage::select('created_at')
+                ->whereColumn('order_id', 'orders.id')
+                ->orderByDesc('created_at')
+                ->limit(1)
+        )->get();
+
+        $rooms = $orders->map(function (Order $order) use ($user) {
+            $lastMessage = $order->chatMessages()->orderByDesc('created_at')->first();
+            $unreadCount = $order->chatMessages()
+                ->where('sender_id', '!=', $user->id)
+                ->whereNull('read_at')
+                ->count();
+
+            $isSupplier = $user->role === 'supplier';
+
+            return [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'supplier_name' => $isSupplier
+                    ? ($order->customer->name ?? 'Cliente')
+                    : ($order->supplier->user->name ?? $order->supplier->business_name ?? 'Fornecedor'),
+                'supplier_logo_url' => $isSupplier
+                    ? ($order->customer->avatar_url ?? null)
+                    : ($order->supplier->logo_url ?? null),
+                'last_message' => $lastMessage?->message,
+                'last_message_at' => $lastMessage?->created_at?->toIso8601String(),
+                'unread_count' => $unreadCount,
+            ];
+        });
+
+        return $this->success($rooms->values());
+    }
+
     public function index(Request $request, Order $order): JsonResponse
     {
         $this->authorizeOrderAccess($request, $order);
