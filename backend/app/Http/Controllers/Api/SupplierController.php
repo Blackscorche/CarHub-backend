@@ -69,13 +69,15 @@ class SupplierController extends Controller
         }
 
         // Sorting
-        $sortBy = $request->input('sort_by', 'distance');
+        $hasLocation = $request->filled(['latitude', 'longitude']);
+        $sortBy = $request->input('sort_by', $hasLocation ? 'distance' : 'rating');
         match ($sortBy) {
             'rating' => $query->orderByDesc('avg_rating'),
             'price' => $query->orderByRaw(
                 '(SELECT MIN(price) FROM catalog_items WHERE catalog_items.supplier_id = suppliers.id AND is_active = 1 AND price IS NOT NULL) ASC'
             ),
-            default => $query->orderBy('distance'),
+            'distance' => $hasLocation ? $query->orderBy('distance') : $query->orderByDesc('avg_rating'),
+            default => $query->orderByDesc('avg_rating'),
         };
 
         $perPage = min((int) $request->input('limit', 20), 50);

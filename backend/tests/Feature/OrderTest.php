@@ -223,11 +223,11 @@ class OrderTest extends TestCase
 
     // ─── Accept Order ─────────────────────────────────────────
 
-    public function test_supplier_can_accept_paid_order(): void
+    public function test_supplier_can_accept_created_order(): void
     {
         $customer = $this->createCustomer();
         ['user' => $supplierUser, 'supplier' => $supplier] = $this->createApprovedSupplier();
-        $order = $this->createOrder($customer->id, $supplier->id, ['status' => 'paid']);
+        $order = $this->createOrder($customer->id, $supplier->id, ['status' => 'created']);
 
         $response = $this->actingAs($supplierUser)
             ->putJson("/api/orders/{$order->id}/accept");
@@ -259,7 +259,7 @@ class OrderTest extends TestCase
     {
         $customer = $this->createCustomer();
         ['user' => $supplierUser, 'supplier' => $supplier] = $this->createApprovedSupplier();
-        $order = $this->createOrder($customer->id, $supplier->id, ['status' => 'paid']);
+        $order = $this->createOrder($customer->id, $supplier->id, ['status' => 'created']);
 
         $response = $this->actingAs($supplierUser)
             ->putJson("/api/orders/{$order->id}/reject", [
@@ -278,7 +278,7 @@ class OrderTest extends TestCase
     {
         $customer = $this->createCustomer();
         ['user' => $supplierUser, 'supplier' => $supplier] = $this->createApprovedSupplier();
-        $order = $this->createOrder($customer->id, $supplier->id, ['status' => 'paid']);
+        $order = $this->createOrder($customer->id, $supplier->id, ['status' => 'created']);
 
         $response = $this->actingAs($supplierUser)
             ->putJson("/api/orders/{$order->id}/reject", []);
@@ -289,11 +289,11 @@ class OrderTest extends TestCase
 
     // ─── Start Order ──────────────────────────────────────────
 
-    public function test_supplier_can_start_accepted_order(): void
+    public function test_supplier_can_start_paid_order(): void
     {
         $customer = $this->createCustomer();
         ['user' => $supplierUser, 'supplier' => $supplier] = $this->createApprovedSupplier();
-        $order = $this->createOrder($customer->id, $supplier->id, ['status' => 'accepted']);
+        $order = $this->createOrder($customer->id, $supplier->id, ['status' => 'paid']);
 
         $response = $this->actingAs($supplierUser)
             ->putJson("/api/orders/{$order->id}/start");

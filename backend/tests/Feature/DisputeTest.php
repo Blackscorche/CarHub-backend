@@ -7,11 +7,23 @@ use App\Models\Order;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
+/**
+ * Dispute routes are excluded from MVP (MP Split Payment prevents auto-refund).
+ * These tests are skipped until dispute routes are re-enabled.
+ */
+#[Group('dispute')]
 class DisputeTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->markTestSkipped('Dispute routes excluded from MVP.');
+    }
 
     // ─── Helpers ──────────────────────────────────────────────
 

@@ -69,7 +69,16 @@
       "Bash(adb -s emulator-5556 install /tmp/carhub.apk)",
       "Bash(adb -s emulator-5554 shell am force-stop com.carhub.app)",
       "Bash(adb -s emulator-5556 shell am start -n com.carhub.app/.MainActivity)",
-      "Bash(grep -E \"\\\\.tsx$\")"
+      "Bash(grep -E \"\\\\.tsx$\")",
+      "Bash(wc -l /home/ubuntu/projects/CarHub/mobile/src/stores/*.ts)",
+      "Bash(find /home/ubuntu/projects/CarHub/mobile/src/components -type f -name *.tsx)",
+      "Bash(find /home/ubuntu/projects/CarHub/backend/database/migrations -name \"*.php\" -exec basename {})",
+      "Bash(grep -r \"password\\\\|secret\\\\|token\\\\|key\" /home/ubuntu/projects/CarHub/backend/config/*.php)",
+      "Bash(wc -l /home/ubuntu/projects/CarHub/backend/app/Http/Controllers/Api/*.php)",
+      "Bash(find /home/ubuntu/projects/CarHub -name jest.config.* -o -name setupTests.*)",
+      "Bash(grep -r \"dd\\(\\\\|dump\\(\\\\|var_dump\\(\\\\|echo\\\\|print_r\" /home/ubuntu/projects/CarHub/backend/app --include=*.php)",
+      "Bash(grep -n \"abort\\\\|forbidden\\\\|authorize\\\\|permission\" /home/ubuntu/projects/CarHub/backend/app/Http/Controllers/Api/*.php)",
+      "Bash(wc -l /home/ubuntu/projects/CarHub/docs/*.md)"
     ],
     "additionalDirectories": [
       "/tmp"
