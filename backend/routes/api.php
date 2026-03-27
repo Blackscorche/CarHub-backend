@@ -150,13 +150,14 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
         Route::post('/reviews', [ReviewController::class, 'store']);
     });
 
-    // Disputes
-    Route::get('/disputes', [DisputeController::class, 'index']);
-    Route::get('/disputes/{dispute}', [DisputeController::class, 'show']);
-    Route::post('/disputes', [DisputeController::class, 'store']);
-    Route::middleware('role:admin')->group(function () {
-        Route::put('/disputes/{dispute}/resolve', [DisputeController::class, 'resolve']);
-    });
+    // Disputes — MVP에서 제외 (MP Split Payment 정산 후 자동환불 불가)
+    // 후속 버전에서 구현 예정. 현재는 고객지원 이메일로 수동 처리.
+    // Route::get('/disputes', [DisputeController::class, 'index']);
+    // Route::get('/disputes/{dispute}', [DisputeController::class, 'show']);
+    // Route::post('/disputes', [DisputeController::class, 'store']);
+    // Route::middleware('role:admin')->group(function () {
+    //     Route::put('/disputes/{dispute}/resolve', [DisputeController::class, 'resolve']);
+    // });
 
     // Schedules
     Route::get('/schedules', [ScheduleController::class, 'index']);

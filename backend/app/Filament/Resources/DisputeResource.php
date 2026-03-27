@@ -17,6 +17,12 @@ class DisputeResource extends Resource
     protected static ?string $navigationLabel = 'Disputas';
     protected static ?int $navigationSort = 6;
 
+    // MVP에서 분쟁 기능 제외 — 관리자 패널에서 숨김
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     public static function form(Form $form): Form
     {
         return $form->schema([
