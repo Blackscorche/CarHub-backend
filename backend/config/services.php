@@ -40,6 +40,9 @@ return [
         'public_key' => env('MERCADOPAGO_PUBLIC_KEY'),
         'webhook_url' => env('MERCADOPAGO_WEBHOOK_URL'),
         'webhook_secret' => env('MERCADOPAGO_WEBHOOK_SECRET'),
+        'client_id' => env('MERCADOPAGO_CLIENT_ID'),
+        'client_secret' => env('MERCADOPAGO_CLIENT_SECRET'),
+        'redirect_uri' => env('MERCADOPAGO_REDIRECT_URI'),
     ],
 
 ];

@@ -30,6 +30,9 @@ return new class extends Migration
             $table->enum('approval_status', ['pending', 'approved', 'rejected'])->default('pending');
             $table->timestamp('approved_at')->nullable();
             $table->string('payment_gateway_id')->nullable();
+            $table->text('mp_access_token')->nullable();
+            $table->string('mp_refresh_token')->nullable();
+            $table->string('mp_user_id')->nullable();
             $table->json('insurance_partners')->nullable();
             $table->timestamps();
 

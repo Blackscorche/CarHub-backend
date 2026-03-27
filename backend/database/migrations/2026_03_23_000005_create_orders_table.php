@@ -16,11 +16,11 @@ return new class extends Migration
             $table->foreignUuid('vehicle_id')->nullable()->constrained()->onDelete('set null');
             $table->enum('type', ['direct', 'quote']);
             $table->enum('status', [
-                'created', 'awaiting_quote', 'quote_sent', 'quote_approved',
+                'pending', 'created', 'awaiting_quote', 'quote_sent', 'quote_approved',
                 'partially_paid', 'paid', 'accepted', 'rejected',
                 'in_progress', 'completed', 'delivered', 'confirmed',
                 'cancelled', 'disputed', 'refunded'
-            ])->default('created');
+            ])->default('pending');
             $table->decimal('subtotal', 10, 2)->default(0);
             $table->decimal('platform_fee', 10, 2)->default(0);
             $table->decimal('total', 10, 2)->default(0);

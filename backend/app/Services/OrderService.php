@@ -104,7 +104,7 @@ class OrderService
                 'platform_fee' => $platformFee,
                 'total' => $total,
                 'commission_rate' => $commissionRate,
-                'payment_method' => $data['payment_method'],
+                'payment_method' => $data['payment_method'] ?? null,
                 'delivery_type' => $data['delivery_type'],
                 'delivery_address_id' => $data['delivery_address_id'] ?? null,
                 'confirmation_code' => strtoupper(Str::random(6)),

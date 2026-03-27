@@ -187,6 +187,7 @@ class PaymentService
 
             if ($newStatus === 'held') {
                 $this->updateOrderAfterPayment($payment->order, $payment->type);
+                event(new \App\Events\OrderPaid($payment->order));
             }
 
             if ($newStatus === 'failed') {

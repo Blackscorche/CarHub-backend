@@ -20,6 +20,11 @@ class Supplier extends Model
         'opening_hours', 'avg_rating', 'total_ratings',
         'is_verified', 'kyc_document_url', 'approval_status',
         'approved_at', 'payment_gateway_id', 'insurance_partners',
+        'mp_access_token', 'mp_refresh_token', 'mp_user_id',
+    ];
+
+    protected $hidden = [
+        'mp_access_token', 'mp_refresh_token',
     ];
 
     protected function casts(): array
