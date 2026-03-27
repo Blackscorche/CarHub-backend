@@ -80,7 +80,7 @@ class OrderController extends Controller
             'items.*.quantity' => 'required|integer|min:1',
             'delivery_type' => 'required|in:pickup,delivery,on_site',
             'delivery_address_id' => 'nullable|uuid|exists:addresses,id',
-            'payment_method' => 'required|in:pix,credit_card,debit_card',
+            'payment_method' => 'nullable|in:pix,credit_card,debit_card',
             'coupon_code' => 'nullable|string|max:50',
             'use_cashback' => 'nullable|boolean',
             'notes' => 'nullable|string|max:500',
@@ -177,6 +177,49 @@ class OrderController extends Controller
             return $this->success($order, 'Pedido confirmado. Pagamento liberado.');
         } catch (\InvalidArgumentException $e) {
             return $this->error($e->getMessage(), 422);
+        }
+    }
+
+    /**
+     * Customer pays for an accepted order (triggers MP Split Payment).
+     */
+    public function pay(Request $request, Order $order): JsonResponse
+    {
+        $request->validate([
+            'payment_method' => 'required|in:pix,credit_card,debit_card',
+            'card_token' => 'required_if:payment_method,credit_card,debit_card|string',
+            'installments' => 'nullable|integer|min:1|max:12',
+        ]);
+
+        $user = $request->user();
+        if ($order->customer_id !== $user->id) {
+            return $this->forbidden('Acesso negado.');
+        }
+
+        if ($order->status !== 'accepted') {
+            return $this->error('Pedido precisa estar aceito para pagamento.', 422);
+        }
+
+        $order->update(['payment_method' => $request->input('payment_method')]);
+
+        try {
+            $paymentService = app(\App\Services\PaymentService::class);
+            $method = $request->input('payment_method');
+
+            if ($method === 'pix') {
+                $result = $paymentService->createPixPayment($order, 'full');
+            } else {
+                $result = $paymentService->createCardPayment(
+                    $order,
+                    $request->input('card_token'),
+                    'full',
+                    $request->input('installments', 1)
+                );
+            }
+
+            return $this->success($result, 'Pagamento iniciado.');
+        } catch (\Throwable $e) {
+            return $this->error($e->getMessage(), 500);
         }
     }
 

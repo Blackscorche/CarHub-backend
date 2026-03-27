@@ -7,6 +7,7 @@ use App\Events\OrderCancelled;
 use App\Events\OrderCompleted;
 use App\Events\OrderConfirmed;
 use App\Events\OrderCreated;
+use App\Events\OrderPaid;
 use App\Events\OrderRejected;
 use App\Events\OrderStarted;
 use App\Models\CatalogItem;
@@ -98,7 +99,7 @@ class OrderService
                 'supplier_id' => $data['supplier_id'],
                 'vehicle_id' => $data['vehicle_id'] ?? null,
                 'type' => 'direct',
-                'status' => 'created',
+                'status' => 'pending',
                 'subtotal' => $subtotal,
                 'platform_fee' => $platformFee,
                 'total' => $total,
@@ -170,7 +171,7 @@ class OrderService
 
     public function acceptOrder(Order $order): Order
     {
-        $this->ensureStatus($order, ['paid', 'partially_paid']);
+        $this->ensureStatus($order, ['pending', 'created']);
 
         $order->update([
             'status' => 'accepted',
@@ -184,7 +185,7 @@ class OrderService
 
     public function rejectOrder(Order $order, string $reason): Order
     {
-        $this->ensureStatus($order, ['paid', 'partially_paid', 'created']);
+        $this->ensureStatus($order, ['pending', 'created']);
 
         $order->update([
             'status' => 'rejected',
@@ -197,9 +198,20 @@ class OrderService
         return $order->fresh();
     }
 
-    public function startOrder(Order $order): Order
+    public function payOrder(Order $order): Order
     {
         $this->ensureStatus($order, ['accepted']);
+
+        $order->update(['status' => 'paid']);
+
+        event(new OrderPaid($order));
+
+        return $order->fresh();
+    }
+
+    public function startOrder(Order $order): Order
+    {
+        $this->ensureStatus($order, ['paid']);
 
         $order->update([
             'status' => 'in_progress',
@@ -242,7 +254,7 @@ class OrderService
 
     public function cancelOrder(Order $order, string $reason, string $cancelledBy): Order
     {
-        $cancellable = ['created', 'paid', 'awaiting_quote', 'quote_sent', 'accepted'];
+        $cancellable = ['pending', 'created', 'paid', 'awaiting_quote', 'quote_sent', 'accepted'];
         $this->ensureStatus($order, $cancellable);
 
         $order->update([

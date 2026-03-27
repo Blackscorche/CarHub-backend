@@ -7,6 +7,8 @@ use App\Models\Supplier;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class SupplierController extends Controller
@@ -269,5 +271,74 @@ class SupplierController extends Controller
         $supplier->update(['logo_url' => '/storage/' . $path]);
 
         return $this->success(['logo_url' => $supplier->logo_url], 'Logo atualizado.');
+    }
+
+    /**
+     * Generate Mercado Pago OAuth URL for supplier to connect their account.
+     */
+    public function connectMercadoPago(Request $request): JsonResponse
+    {
+        $supplier = $request->user()->supplier;
+        if (! $supplier) {
+            return $this->error('Perfil de fornecedor não encontrado.', 404);
+        }
+
+        $clientId = config('services.mercadopago.client_id');
+        $redirectUri = config('services.mercadopago.redirect_uri');
+
+        if (! $clientId || ! $redirectUri) {
+            return $this->error('Mercado Pago não configurado.', 500);
+        }
+
+        $url = 'https://auth.mercadopago.com.br/authorization?' . http_build_query([
+            'client_id' => $clientId,
+            'response_type' => 'code',
+            'platform_id' => 'mp',
+            'redirect_uri' => $redirectUri,
+            'state' => $supplier->id,
+        ]);
+
+        return $this->success(['authorization_url' => $url]);
+    }
+
+    /**
+     * Handle Mercado Pago OAuth callback — exchange code for access token.
+     */
+    public function mercadoPagoCallback(Request $request): JsonResponse
+    {
+        $request->validate([
+            'code' => 'required|string',
+            'state' => 'required|uuid',
+        ]);
+
+        $supplier = Supplier::findOrFail($request->input('state'));
+
+        try {
+            $response = Http::post('https://api.mercadopago.com/oauth/token', [
+                'client_id' => config('services.mercadopago.client_id'),
+                'client_secret' => config('services.mercadopago.client_secret'),
+                'grant_type' => 'authorization_code',
+                'code' => $request->input('code'),
+                'redirect_uri' => config('services.mercadopago.redirect_uri'),
+            ]);
+
+            if (! $response->successful()) {
+                Log::error('MP OAuth error', ['response' => $response->json()]);
+                return $this->error('Falha na autorização do Mercado Pago.', 422);
+            }
+
+            $data = $response->json();
+
+            $supplier->update([
+                'mp_access_token' => $data['access_token'],
+                'mp_refresh_token' => $data['refresh_token'] ?? null,
+                'mp_user_id' => $data['user_id'] ?? null,
+            ]);
+
+            return $this->success(['connected' => true], 'Mercado Pago conectado com sucesso.');
+        } catch (\Throwable $e) {
+            Log::error('MP OAuth exception', ['error' => $e->getMessage()]);
+            return $this->error('Erro ao conectar Mercado Pago.', 500);
+        }
     }
 }

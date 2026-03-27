@@ -80,6 +80,8 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
         Route::post('/logo', [SupplierController::class, 'uploadLogo']);
         Route::get('/balance', [PaymentController::class, 'supplierBalance']);
         Route::get('/transactions', [PaymentController::class, 'supplierTransactions']);
+        Route::get('/connect-mercadopago', [SupplierController::class, 'connectMercadoPago']);
+        Route::get('/mercadopago-callback', [SupplierController::class, 'mercadoPagoCallback']);
     });
 
     // Catalog management (supplier only)
@@ -97,6 +99,7 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
 
     Route::middleware('role:customer')->group(function () {
         Route::post('/orders', [OrderController::class, 'store']);
+        Route::post('/orders/{order}/pay', [OrderController::class, 'pay']);
         Route::put('/orders/{order}/confirm', [OrderController::class, 'confirm']);
     });
 

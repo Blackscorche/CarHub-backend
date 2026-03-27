@@ -68,7 +68,8 @@
       "Bash(adb -s emulator-5554 pull /data/app/~~V_b9KhxF-Wrc1KnCE2DdrQ==/com.carhub.app-knPT875aqBbYAbBUQHTj0A==/base.apk /tmp/carhub.apk)",
       "Bash(adb -s emulator-5556 install /tmp/carhub.apk)",
       "Bash(adb -s emulator-5554 shell am force-stop com.carhub.app)",
-      "Bash(adb -s emulator-5556 shell am start -n com.carhub.app/.MainActivity)"
+      "Bash(adb -s emulator-5556 shell am start -n com.carhub.app/.MainActivity)",
+      "Bash(grep -E \"\\\\.tsx$\")"
     ],
     "additionalDirectories": [
       "/tmp"
