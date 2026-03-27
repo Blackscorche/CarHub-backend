@@ -3,7 +3,9 @@
 namespace Database\Seeders;
 
 use App\Models\Address;
+use App\Models\CatalogItem;
 use App\Models\Supplier;
+use App\Models\SupplierInsuranceTag;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
@@ -27,6 +29,12 @@ class SupplierSeeder extends Seeder
                 'city' => 'São Paulo',
                 'state' => 'SP',
                 'zip_code' => '01304-001',
+                'insurances' => ['Porto Seguro', 'Bradesco Seguros', 'SulAmérica'],
+                'catalog' => [
+                    ['name' => 'Troca de óleo', 'price' => 89.90, 'type' => 'service', 'duration' => 30],
+                    ['name' => 'Revisão completa', 'price' => 350.00, 'type' => 'service', 'duration' => 120],
+                    ['name' => 'Troca de pastilha de freio', 'price' => 180.00, 'type' => 'service', 'duration' => 60],
+                ],
             ],
             [
                 'business_name' => 'Elétrica Rápida',
@@ -42,6 +50,12 @@ class SupplierSeeder extends Seeder
                 'city' => 'São Paulo',
                 'state' => 'SP',
                 'zip_code' => '01310-100',
+                'insurances' => ['Liberty', 'Tokio Marine'],
+                'catalog' => [
+                    ['name' => 'Diagnóstico computadorizado', 'price' => 120.00, 'type' => 'service', 'duration' => 45],
+                    ['name' => 'Troca de bateria', 'price' => 450.00, 'type' => 'product', 'duration' => 20],
+                    ['name' => 'Instalação de alarme', 'price' => 280.00, 'type' => 'service', 'duration' => 90],
+                ],
             ],
             [
                 'business_name' => 'Funilaria Express',
@@ -57,6 +71,12 @@ class SupplierSeeder extends Seeder
                 'city' => 'São Paulo',
                 'state' => 'SP',
                 'zip_code' => '03104-001',
+                'insurances' => ['Porto Seguro', 'Allianz', 'Mapfre', 'HDI'],
+                'catalog' => [
+                    ['name' => 'Reparo de amassado pequeno', 'price' => 200.00, 'type' => 'service', 'duration' => 60],
+                    ['name' => 'Pintura parcial', 'price' => 800.00, 'type' => 'service', 'duration' => 480],
+                    ['name' => 'Pintura completa', 'price' => 3500.00, 'type' => 'service', 'duration' => 2400],
+                ],
             ],
             [
                 'business_name' => 'PneuTop Center',
@@ -72,6 +92,13 @@ class SupplierSeeder extends Seeder
                 'city' => 'São Paulo',
                 'state' => 'SP',
                 'zip_code' => '05426-100',
+                'insurances' => ['Porto Seguro', 'SulAmérica', 'Zurich'],
+                'catalog' => [
+                    ['name' => 'Alinhamento e balanceamento', 'price' => 80.00, 'type' => 'service', 'duration' => 40],
+                    ['name' => 'Pneu 195/55 R15', 'price' => 320.00, 'type' => 'product', 'duration' => 30],
+                    ['name' => 'Pneu 225/45 R17', 'price' => 550.00, 'type' => 'product', 'duration' => 30],
+                    ['name' => 'Rodízio de pneus', 'price' => 60.00, 'type' => 'service', 'duration' => 30],
+                ],
             ],
             [
                 'business_name' => 'Estética Car Premium',
@@ -87,15 +114,25 @@ class SupplierSeeder extends Seeder
                 'city' => 'São Paulo',
                 'state' => 'SP',
                 'zip_code' => '01426-001',
+                'insurances' => ['Bradesco Seguros', 'Tokio Marine', 'Allianz'],
+                'catalog' => [
+                    ['name' => 'Lavagem detalhada', 'price' => 150.00, 'type' => 'service', 'duration' => 90],
+                    ['name' => 'Cristalização', 'price' => 400.00, 'type' => 'service', 'duration' => 180],
+                    ['name' => 'Vitrificação', 'price' => 1200.00, 'type' => 'service', 'duration' => 360],
+                    ['name' => 'Higienização interna completa', 'price' => 250.00, 'type' => 'service', 'duration' => 120],
+                ],
             ],
         ];
 
         foreach ($suppliers as $data) {
+            $index = array_search($data, $suppliers);
+            $email = $index === 0 ? 'supplier1@gmail.com' : Str::slug($data['business_name'], '.') . '@carhub.test';
+
             $user = User::create([
                 'id' => Str::uuid(),
                 'name' => $data['business_name'],
-                'email' => Str::slug($data['business_name'], '.') . '@carhub.test',
-                'password' => bcrypt('password'),
+                'email' => $email,
+                'password' => bcrypt('123!@#qweQWE'),
                 'role' => 'supplier',
                 'phone' => '11' . rand(900000000, 999999999),
             ]);
@@ -114,7 +151,7 @@ class SupplierSeeder extends Seeder
                 'is_default' => true,
             ]);
 
-            Supplier::create([
+            $supplier = Supplier::create([
                 'id' => Str::uuid(),
                 'user_id' => $user->id,
                 'business_name' => $data['business_name'],
@@ -130,6 +167,29 @@ class SupplierSeeder extends Seeder
                 'approval_status' => 'approved',
                 'approved_at' => now(),
             ]);
+
+            // Insurance tags
+            foreach ($data['insurances'] as $insurance) {
+                SupplierInsuranceTag::create([
+                    'id' => Str::uuid(),
+                    'supplier_id' => $supplier->id,
+                    'insurance_name' => $insurance,
+                ]);
+            }
+
+            // Catalog items
+            foreach ($data['catalog'] as $item) {
+                CatalogItem::create([
+                    'id' => Str::uuid(),
+                    'supplier_id' => $supplier->id,
+                    'name' => $item['name'],
+                    'price' => $item['price'],
+                    'type' => $item['type'],
+                    'estimated_duration_minutes' => $item['duration'],
+                    'category' => $data['category'],
+                    'is_active' => true,
+                ]);
+            }
         }
     }
 }

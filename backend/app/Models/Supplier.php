@@ -82,8 +82,7 @@ class Supplier extends Model
             ->selectRaw("{$haversine} AS distance", [$lat, $lng, $lat])
             ->whereNotNull('latitude')
             ->whereNotNull('longitude')
-            ->havingRaw("distance < ?", [$radiusKm])
-            ->orderBy('distance');
+            ->havingRaw("distance < ?", [$radiusKm]);
     }
 
     public function scopeApproved(Builder $query): Builder

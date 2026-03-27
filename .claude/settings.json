@@ -56,7 +56,19 @@
       "Bash(adb logcat:*)",
       "WebSearch",
       "Bash(adb exec-out:*)",
-      "WebFetch(domain:lottie.host)"
+      "WebFetch(domain:lottie.host)",
+      "Bash(adb -s emulator-5554 logcat -d -t 100)",
+      "Bash(adb -s emulator-5554 shell am force-stop host.exp.exponent)",
+      "Bash(adb -s emulator-5554 shell am start -a android.intent.action.VIEW -d \"exp://localhost:8081\")",
+      "Bash(adb -s emulator-5554 logcat -d -t 200)",
+      "Bash(adb -s emulator-5556 shell pm list packages)",
+      "Bash(adb -s emulator-5554 shell monkey -p com.carhub.app -c android.intent.category.LAUNCHER 1)",
+      "Bash(adb -s emulator-5554 shell am start -n com.carhub.app/.MainActivity)",
+      "Bash(adb -s emulator-5554 shell pm path com.carhub.app)",
+      "Bash(adb -s emulator-5554 pull /data/app/~~V_b9KhxF-Wrc1KnCE2DdrQ==/com.carhub.app-knPT875aqBbYAbBUQHTj0A==/base.apk /tmp/carhub.apk)",
+      "Bash(adb -s emulator-5556 install /tmp/carhub.apk)",
+      "Bash(adb -s emulator-5554 shell am force-stop com.carhub.app)",
+      "Bash(adb -s emulator-5556 shell am start -n com.carhub.app/.MainActivity)"
     ],
     "additionalDirectories": [
       "/tmp"

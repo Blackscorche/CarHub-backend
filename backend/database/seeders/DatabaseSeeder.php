@@ -12,6 +12,7 @@ class DatabaseSeeder extends Seeder
             AdminSeeder::class,
             PlatformConfigSeeder::class,
             SupplierSeeder::class,
+            CustomerSeeder::class,
         ]);
     }
 }

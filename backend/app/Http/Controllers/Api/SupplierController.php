@@ -73,7 +73,7 @@ class SupplierController extends Controller
             'price' => $query->orderByRaw(
                 '(SELECT MIN(price) FROM catalog_items WHERE catalog_items.supplier_id = suppliers.id AND is_active = 1 AND price IS NOT NULL) ASC'
             ),
-            default => null, // distance already ordered by scopeNearby
+            default => $query->orderBy('distance'),
         };
 
         $perPage = min((int) $request->input('limit', 20), 50);
@@ -123,15 +123,38 @@ class SupplierController extends Controller
             * cos(radians(longitude) - radians(?)) + sin(radians(?))
             * sin(radians(latitude))))";
 
-        $suppliers = Supplier::approved()
+        $query = Supplier::approved()
             ->select(['id', 'business_name', 'category', 'latitude', 'longitude', 'avg_rating', 'logo_url'])
             ->selectRaw("{$haversine} AS distance", [$lat, $lng, $lat])
             ->whereNotNull('latitude')
             ->whereNotNull('longitude')
-            ->havingRaw("distance < ?", [$radius])
-            ->orderBy('distance')
-            ->limit(200)
-            ->get();
+            ->havingRaw("distance < ?", [$radius]);
+
+        if ($request->filled('category')) {
+            $query->where('category', $request->category);
+        }
+        if ($request->filled('min_rating')) {
+            $query->where('avg_rating', '>=', (float) $request->min_rating);
+        }
+        if ($request->filled('insurance_name')) {
+            $query->whereHas('insuranceTags', fn ($q) => $q->where('insurance_name', $request->insurance_name));
+        }
+        if ($request->filled('price_min') || $request->filled('price_max')) {
+            $query->whereHas('catalogItems', function ($q) use ($request) {
+                $q->where('is_active', true);
+                if ($request->filled('price_min')) $q->where('price', '>=', (float) $request->price_min);
+                if ($request->filled('price_max')) $q->where('price', '<=', (float) $request->price_max);
+            });
+        }
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('business_name', 'like', "%{$search}%")
+                  ->orWhereHas('user', fn ($u) => $u->where('name', 'like', "%{$search}%"));
+            });
+        }
+
+        $suppliers = $query->orderBy('distance')->limit(200)->get();
 
         return $this->success($suppliers);
     }
@@ -161,7 +184,7 @@ class SupplierController extends Controller
             'address.complement' => 'nullable|string',
             'address.neighborhood' => 'required_with:address|string',
             'address.city' => 'required_with:address|string',
-            'address.state' => 'required_with:address|string|size:2',
+            'address.state' => 'required_with:address|string|max:2',
             'address.zip_code' => 'required_with:address|string',
             'address.latitude' => 'nullable|numeric|between:-90,90',
             'address.longitude' => 'nullable|numeric|between:-180,180',
