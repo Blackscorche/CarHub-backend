@@ -5,60 +5,45 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\PlatformConfig;
-use App\Models\Supplier;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class PaymentService
 {
-    protected string $mpAccessToken;
-    protected string $mpBaseUrl = 'https://api.mercadopago.com';
+    protected PagarmeClient $pagarme;
 
-    public function __construct()
+    public function __construct(PagarmeClient $pagarme)
     {
-        $this->mpAccessToken = config('services.mercadopago.access_token', '');
+        $this->pagarme = $pagarme;
     }
+
+    // ─── Pix Payment ─────────────────────────────────────────
 
     public function createPixPayment(Order $order, string $type = 'full'): array
     {
         $amount = $this->resolveAmount($order, $type);
         $split = $this->calculateSplit($order, $amount);
+        $idempotencyKey = "pix-{$order->id}-{$type}";
 
-        $idempotencyKey = 'pix-' . $order->id . '-' . $type . '-' . Str::random(8);
-
-        $mpPayload = [
-            'transaction_amount' => (float) $amount,
-            'payment_method_id' => 'pix',
-            'payer' => [
-                'email' => $order->customer->email,
-                'first_name' => $order->customer->name,
+        $payload = [
+            'items' => $this->buildItems($order),
+            'customer' => $this->buildCustomer($order),
+            'payments' => [
+                [
+                    'payment_method' => 'pix',
+                    'pix' => [
+                        'expires_in' => 900, // 15 minutes
+                    ],
+                    'amount' => (int) round($amount * 100), // Pagar.me uses cents
+                    'split' => $this->buildSplit($order, $split),
+                ],
             ],
-            'description' => "CarHub Pedido #{$order->order_number}",
-            'external_reference' => $order->id,
-            'notification_url' => config('services.mercadopago.webhook_url'),
         ];
 
-        // Apply split if supplier has gateway account
-        $supplier = $order->supplier;
-        if ($supplier->payment_gateway_id) {
-            $mpPayload['application_fee'] = $split['platform_fee'];
-        }
+        $response = $this->pagarme->post('/orders', $payload, $idempotencyKey);
 
-        $response = Http::withToken($this->mpAccessToken)
-            ->withHeaders(['X-Idempotency-Key' => $idempotencyKey])
-            ->post("{$this->mpBaseUrl}/v1/payments", $mpPayload);
-
-        if (! $response->successful()) {
-            Log::error('MercadoPago Pix creation failed', [
-                'order_id' => $order->id,
-                'response' => $response->json(),
-            ]);
-            throw new \RuntimeException('Erro ao criar pagamento Pix.');
-        }
-
-        $mpData = $response->json();
+        $charge = $response['charges'][0] ?? [];
+        $pixData = $charge['last_transaction'] ?? [];
 
         $payment = Payment::create([
             'order_id' => $order->id,
@@ -69,59 +54,49 @@ class PaymentService
             'method' => 'pix',
             'type' => $type,
             'status' => 'pending',
-            'gateway_transaction_id' => (string) $mpData['id'],
-            'gateway_response' => $mpData,
+            'pagarme_charge_id' => $charge['id'] ?? null,
+            'gateway_response' => $response,
         ]);
 
         return [
             'payment_id' => $payment->id,
-            'gateway_id' => $mpData['id'],
-            'qr_code' => $mpData['point_of_interaction']['transaction_data']['qr_code'] ?? null,
-            'qr_code_base64' => $mpData['point_of_interaction']['transaction_data']['qr_code_base64'] ?? null,
-            'expires_at' => $mpData['date_of_expiration'] ?? now()->addMinutes(15)->toIso8601String(),
+            'pix_code' => $pixData['qr_code'] ?? null,
+            'qr_code_url' => $pixData['qr_code_url'] ?? null,
+            'expires_at' => $pixData['expires_at'] ?? now()->addMinutes(15)->toIso8601String(),
+            'status' => 'pending',
         ];
     }
+
+    // ─── Card Payment ────────────────────────────────────────
 
     public function createCardPayment(Order $order, string $cardToken, string $type = 'full', int $installments = 1): array
     {
         $amount = $this->resolveAmount($order, $type);
         $split = $this->calculateSplit($order, $amount);
+        $idempotencyKey = "card-{$order->id}-{$type}";
 
-        $idempotencyKey = 'card-' . $order->id . '-' . $type . '-' . Str::random(8);
-
-        $mpPayload = [
-            'transaction_amount' => (float) $amount,
-            'token' => $cardToken,
-            'installments' => $installments,
-            'payer' => [
-                'email' => $order->customer->email,
+        $payload = [
+            'items' => $this->buildItems($order),
+            'customer' => $this->buildCustomer($order),
+            'payments' => [
+                [
+                    'payment_method' => 'credit_card',
+                    'credit_card' => [
+                        'card_token' => $cardToken,
+                        'installments' => $installments,
+                        'statement_descriptor' => 'CARHUB',
+                    ],
+                    'amount' => (int) round($amount * 100),
+                    'split' => $this->buildSplit($order, $split),
+                ],
             ],
-            'description' => "CarHub Pedido #{$order->order_number}",
-            'external_reference' => $order->id,
-            'notification_url' => config('services.mercadopago.webhook_url'),
         ];
 
-        $supplier = $order->supplier;
-        if ($supplier->payment_gateway_id) {
-            $mpPayload['application_fee'] = $split['platform_fee'];
-        }
+        $response = $this->pagarme->post('/orders', $payload, $idempotencyKey);
 
-        $response = Http::withToken($this->mpAccessToken)
-            ->withHeaders(['X-Idempotency-Key' => $idempotencyKey])
-            ->post("{$this->mpBaseUrl}/v1/payments", $mpPayload);
+        $charge = $response['charges'][0] ?? [];
+        $status = $this->mapPagarmeStatus($charge['status'] ?? 'pending');
 
-        if (! $response->successful()) {
-            Log::error('MercadoPago Card payment failed', [
-                'order_id' => $order->id,
-                'response' => $response->json(),
-            ]);
-            throw new \RuntimeException('Erro ao processar pagamento com cartão.');
-        }
-
-        $mpData = $response->json();
-        $status = $this->mapGatewayStatus($mpData['status'] ?? 'pending');
-
-        $holdPeriod = $this->getHoldPeriodHours();
         $payment = Payment::create([
             'order_id' => $order->id,
             'payer_id' => $order->customer_id,
@@ -131,9 +106,9 @@ class PaymentService
             'method' => 'credit_card',
             'type' => $type,
             'status' => $status,
-            'gateway_transaction_id' => (string) $mpData['id'],
-            'gateway_response' => $mpData,
-            'hold_until' => $status === 'held' ? now()->addHours($holdPeriod) : null,
+            'pagarme_charge_id' => $charge['id'] ?? null,
+            'gateway_response' => $response,
+            'hold_until' => $status === 'held' ? now()->addHours($this->getHoldPeriodHours()) : null,
         ]);
 
         if ($status === 'held') {
@@ -142,46 +117,37 @@ class PaymentService
 
         return [
             'payment_id' => $payment->id,
-            'gateway_id' => $mpData['id'],
             'status' => $status,
         ];
     }
 
+    // ─── Webhook ─────────────────────────────────────────────
+
     public function handleWebhook(array $payload): void
     {
-        $action = $payload['action'] ?? $payload['type'] ?? null;
-        if ($action !== 'payment.updated' && $action !== 'payment') {
+        $type = $payload['type'] ?? null;
+        if ($type !== 'charge.paid' && $type !== 'charge.payment_failed') {
             return;
         }
 
-        $gatewayId = $payload['data']['id'] ?? null;
-        if (! $gatewayId) {
+        $chargeData = $payload['data'] ?? [];
+        $chargeId = $chargeData['id'] ?? null;
+        if (!$chargeId) {
             return;
         }
 
-        // Fetch payment details from Mercado Pago
-        $response = Http::withToken($this->mpAccessToken)
-            ->get("{$this->mpBaseUrl}/v1/payments/{$gatewayId}");
-
-        if (! $response->successful()) {
-            Log::error('MercadoPago webhook fetch failed', ['gateway_id' => $gatewayId]);
+        $payment = Payment::where('pagarme_charge_id', $chargeId)->first();
+        if (!$payment) {
+            Log::warning('Payment not found for Pagar.me charge', ['charge_id' => $chargeId]);
             return;
         }
 
-        $mpData = $response->json();
-        $payment = Payment::where('gateway_transaction_id', (string) $gatewayId)->first();
+        $newStatus = $type === 'charge.paid' ? 'held' : 'failed';
 
-        if (! $payment) {
-            Log::warning('Payment not found for gateway ID', ['gateway_id' => $gatewayId]);
-            return;
-        }
-
-        $newStatus = $this->mapGatewayStatus($mpData['status']);
-
-        DB::transaction(function () use ($payment, $newStatus, $mpData) {
+        DB::transaction(function () use ($payment, $newStatus, $chargeData) {
             $payment->update([
                 'status' => $newStatus,
-                'gateway_response' => $mpData,
+                'gateway_response' => $chargeData,
                 'hold_until' => $newStatus === 'held' ? now()->addHours($this->getHoldPeriodHours()) : $payment->hold_until,
             ]);
 
@@ -189,35 +155,43 @@ class PaymentService
                 $this->updateOrderAfterPayment($payment->order, $payment->type);
                 event(new \App\Events\OrderPaid($payment->order));
             }
-
-            if ($newStatus === 'failed') {
-                Log::info('Payment failed', ['payment_id' => $payment->id]);
-            }
         });
     }
 
+    // ─── Refund ──────────────────────────────────────────────
+
     public function refund(Payment $payment, ?float $amount = null): void
     {
-        $refundAmount = $amount ?? $payment->amount;
+        $refundAmountCents = (int) round(($amount ?? $payment->amount) * 100);
 
-        $response = Http::withToken($this->mpAccessToken)
-            ->post("{$this->mpBaseUrl}/v1/payments/{$payment->gateway_transaction_id}/refunds", [
-                'amount' => (float) $refundAmount,
-            ]);
-
-        if (! $response->successful()) {
-            Log::error('MercadoPago refund failed', [
-                'payment_id' => $payment->id,
-                'response' => $response->json(),
-            ]);
-            throw new \RuntimeException('Erro ao processar reembolso.');
-        }
+        $this->pagarme->post("/charges/{$payment->pagarme_charge_id}/refunds", [
+            'amount' => $refundAmountCents,
+        ]);
 
         $payment->update([
             'status' => 'refunded',
             'refunded_at' => now(),
         ]);
     }
+
+    // ─── Manual Withdraw (for milestone releases) ────────────
+
+    public function manualWithdraw(string $recipientId, float $amount): array
+    {
+        $response = $this->pagarme->post("/recipients/{$recipientId}/withdrawals", [
+            'amount' => (int) round($amount * 100),
+        ]);
+
+        Log::info('Pagar.me manual withdrawal', [
+            'recipient_id' => $recipientId,
+            'amount' => $amount,
+            'response_id' => $response['id'] ?? null,
+        ]);
+
+        return $response;
+    }
+
+    // ─── Release Payment ─────────────────────────────────────
 
     public function releasePayment(Payment $payment): void
     {
@@ -227,8 +201,26 @@ class PaymentService
         ]);
     }
 
+    // ─── Supplier Balance ────────────────────────────────────
+
     public function getSupplierBalance(string $supplierId): array
     {
+        $supplier = \App\Models\Supplier::findOrFail($supplierId);
+
+        if ($supplier->pagarme_recipient_id) {
+            try {
+                $response = $this->pagarme->get("/recipients/{$supplier->pagarme_recipient_id}/balance");
+                return [
+                    'available' => ($response['available']['amount'] ?? 0) / 100,
+                    'held' => ($response['waiting_funds']['amount'] ?? 0) / 100,
+                    'total' => (($response['available']['amount'] ?? 0) + ($response['waiting_funds']['amount'] ?? 0)) / 100,
+                ];
+            } catch (\Throwable $e) {
+                Log::warning('Failed to fetch Pagar.me balance', ['error' => $e->getMessage()]);
+            }
+        }
+
+        // Fallback to DB calculation
         $held = Payment::whereHas('order', fn ($q) => $q->where('supplier_id', $supplierId))
             ->where('status', 'held')
             ->sum('supplier_amount');
@@ -238,8 +230,8 @@ class PaymentService
             ->sum('supplier_amount');
 
         return [
-            'held' => round((float) $held, 2),
             'available' => round((float) $released, 2),
+            'held' => round((float) $held, 2),
             'total' => round((float) $held + (float) $released, 2),
         ];
     }
@@ -250,6 +242,66 @@ class PaymentService
             ->with('order:id,order_number,total')
             ->orderByDesc('created_at')
             ->paginate($limit);
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────
+
+    protected function buildItems(Order $order): array
+    {
+        return $order->items->map(fn ($item) => [
+            'amount' => (int) round($item->unit_price * $item->quantity * 100),
+            'description' => $item->name,
+            'quantity' => $item->quantity,
+        ])->toArray();
+    }
+
+    protected function buildCustomer(Order $order): array
+    {
+        $user = $order->customer;
+        return [
+            'name' => $user->name,
+            'email' => $user->email,
+            'type' => 'individual',
+            'document' => $user->cpf ?? '00000000000',
+            'document_type' => 'CPF',
+        ];
+    }
+
+    protected function buildSplit(Order $order, array $split): array
+    {
+        $splits = [];
+
+        // Supplier portion
+        $supplier = $order->supplier;
+        if ($supplier->pagarme_recipient_id) {
+            $splits[] = [
+                'amount' => (int) round($split['supplier_amount'] * 100),
+                'recipient_id' => $supplier->pagarme_recipient_id,
+                'type' => 'flat',
+                'options' => [
+                    'liable' => true,
+                    'charge_processing_fee' => true,
+                    'charge_remainder_fee' => false,
+                ],
+            ];
+        }
+
+        // Platform portion
+        $platformRecipientId = config('services.pagarme.platform_recipient_id');
+        if ($platformRecipientId) {
+            $splits[] = [
+                'amount' => (int) round($split['platform_fee'] * 100),
+                'recipient_id' => $platformRecipientId,
+                'type' => 'flat',
+                'options' => [
+                    'liable' => false,
+                    'charge_processing_fee' => false,
+                    'charge_remainder_fee' => true,
+                ],
+            ];
+        }
+
+        return $splits;
     }
 
     protected function resolveAmount(Order $order, string $type): float
@@ -304,12 +356,12 @@ class PaymentService
         }
     }
 
-    protected function mapGatewayStatus(string $mpStatus): string
+    protected function mapPagarmeStatus(string $status): string
     {
-        return match ($mpStatus) {
-            'approved' => 'held',
-            'pending', 'in_process', 'authorized' => 'pending',
-            'rejected', 'cancelled' => 'failed',
+        return match ($status) {
+            'paid' => 'held',
+            'pending', 'processing' => 'pending',
+            'failed', 'canceled' => 'failed',
             'refunded' => 'refunded',
             default => 'pending',
         };
