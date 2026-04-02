@@ -96,7 +96,7 @@ class Order extends Model
 
     public function milestones(): HasMany
     {
-        return $this->hasMany(PaymentMilestone::class)->orderBy('stage');
+        return $this->hasMany(PaymentMilestone::class)->orderBy('sequence');
     }
 
     public function isMilestone(): bool
