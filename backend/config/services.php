@@ -35,14 +35,12 @@ return [
         ],
     ],
 
-    'mercadopago' => [
-        'access_token' => env('MERCADOPAGO_ACCESS_TOKEN'),
-        'public_key' => env('MERCADOPAGO_PUBLIC_KEY'),
-        'webhook_url' => env('MERCADOPAGO_WEBHOOK_URL'),
-        'webhook_secret' => env('MERCADOPAGO_WEBHOOK_SECRET'),
-        'client_id' => env('MERCADOPAGO_CLIENT_ID'),
-        'client_secret' => env('MERCADOPAGO_CLIENT_SECRET'),
-        'redirect_uri' => env('MERCADOPAGO_REDIRECT_URI'),
+    'pagarme' => [
+        'secret_key' => env('PAGARME_SECRET_KEY'),
+        'public_key' => env('PAGARME_PUBLIC_KEY'),
+        'webhook_secret' => env('PAGARME_WEBHOOK_SECRET'),
+        'platform_recipient_id' => env('PAGARME_PLATFORM_RECIPIENT_ID'),
+        'api_url' => 'https://api.pagar.me/core/v5',
     ],
 
 ];
