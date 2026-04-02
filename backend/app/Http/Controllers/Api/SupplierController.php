@@ -4,10 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Supplier;
+use App\Services\PagarmeClient;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -276,71 +277,149 @@ class SupplierController extends Controller
     }
 
     /**
-     * Generate Mercado Pago OAuth URL for supplier to connect their account.
+     * Register or update supplier bank account + create Pagar.me recipient.
      */
-    public function connectMercadoPago(Request $request): JsonResponse
+    public function registerBankAccount(Request $request): JsonResponse
     {
         $supplier = $request->user()->supplier;
-        if (! $supplier) {
+        if (!$supplier) {
             return $this->error('Perfil de fornecedor não encontrado.', 404);
         }
 
-        $clientId = config('services.mercadopago.client_id');
-        $redirectUri = config('services.mercadopago.redirect_uri');
-
-        if (! $clientId || ! $redirectUri) {
-            return $this->error('Mercado Pago não configurado.', 500);
-        }
-
-        $url = 'https://auth.mercadopago.com.br/authorization?' . http_build_query([
-            'client_id' => $clientId,
-            'response_type' => 'code',
-            'platform_id' => 'mp',
-            'redirect_uri' => $redirectUri,
-            'state' => $supplier->id,
+        $request->validate([
+            'bank_code' => 'required|string|size:3',
+            'agencia' => 'required|string|max:10',
+            'agencia_dv' => 'nullable|string|max:2',
+            'conta' => 'required|string|max:20',
+            'conta_dv' => 'required|string|max:2',
+            'type' => 'required|in:conta_corrente,conta_poupanca',
+            'document_type' => 'required|in:cpf,cnpj',
+            'document_number' => 'required|string|max:18',
+            'legal_name' => 'required|string|max:255',
         ]);
 
-        return $this->success(['authorization_url' => $url]);
+        $pagarme = app(PagarmeClient::class);
+        $supplier->loadMissing('user');
+
+        try {
+            return DB::transaction(function () use ($request, $supplier, $pagarme) {
+                // 1. Create bank account on Pagar.me
+                $bankResponse = $pagarme->post('/bank_accounts', [
+                    'bank_code' => $request->bank_code,
+                    'agencia' => $request->agencia,
+                    'agencia_dv' => $request->agencia_dv,
+                    'conta' => $request->conta,
+                    'conta_dv' => $request->conta_dv,
+                    'type' => $request->type,
+                    'document_type' => $request->document_type,
+                    'document_number' => preg_replace('/\D/', '', $request->document_number),
+                    'legal_name' => $request->legal_name,
+                ]);
+
+                $bankAccountId = $bankResponse['id'];
+
+                // 2. Save locally
+                $bankAccount = $supplier->bankAccount()->updateOrCreate(
+                    ['supplier_id' => $supplier->id],
+                    [
+                        'bank_code' => $request->bank_code,
+                        'agencia' => $request->agencia,
+                        'agencia_dv' => $request->agencia_dv,
+                        'conta' => $request->conta,
+                        'conta_dv' => $request->conta_dv,
+                        'type' => $request->type,
+                        'document_type' => $request->document_type,
+                        'document_number' => $request->document_number,
+                        'legal_name' => $request->legal_name,
+                        'pagarme_bank_account_id' => $bankAccountId,
+                    ]
+                );
+
+                // 3. Create recipient or update existing recipient's bank account
+                if ($supplier->pagarme_recipient_id) {
+                    // Update existing recipient's bank account
+                    $pagarme->patch("/recipients/{$supplier->pagarme_recipient_id}", [
+                        'default_bank_account_id' => $bankAccountId,
+                    ]);
+                } else {
+                    $isCompany = $request->document_type === 'cnpj';
+
+                    $registerInfo = $isCompany ? [
+                        'type' => 'corporation',
+                        'document' => preg_replace('/\D/', '', $request->document_number),
+                        'company_name' => $supplier->business_name,
+                        'trading_name' => $supplier->business_name,
+                        'email' => $supplier->user->email,
+                    ] : [
+                        'type' => 'individual',
+                        'document' => preg_replace('/\D/', '', $request->document_number),
+                        'name' => $request->legal_name,
+                        'email' => $supplier->user->email,
+                    ];
+
+                    $recipientResponse = $pagarme->post('/recipients', [
+                        'name' => $supplier->business_name,
+                        'email' => $supplier->user->email,
+                        'document' => preg_replace('/\D/', '', $request->document_number),
+                        'type' => $isCompany ? 'company' : 'individual',
+                        'default_bank_account_id' => $bankAccountId,
+                        'transfer_settings' => [
+                            'transfer_enabled' => false, // default: manual control
+                            'transfer_interval' => 'daily',
+                            'transfer_day' => 0,
+                        ],
+                        'register_information' => $registerInfo,
+                    ]);
+
+                    $supplier->update([
+                        'pagarme_recipient_id' => $recipientResponse['id'],
+                    ]);
+                }
+
+                return $this->success([
+                    'bank_account' => [
+                        'id' => $bankAccount->id,
+                        'bank_code' => $bankAccount->bank_code,
+                        'agencia' => $bankAccount->agencia,
+                        'type' => $bankAccount->type,
+                        'legal_name' => $bankAccount->legal_name,
+                    ],
+                    'recipient_id' => $supplier->fresh()->pagarme_recipient_id,
+                ], 'Dados bancários registrados com sucesso.');
+            });
+        } catch (\Throwable $e) {
+            Log::error('Supplier bank account registration failed', [
+                'supplier_id' => $supplier->id,
+                'error' => $e->getMessage(),
+            ]);
+            return $this->error('Erro ao registrar dados bancários. Verifique os dados e tente novamente.', 422);
+        }
     }
 
     /**
-     * Handle Mercado Pago OAuth callback — exchange code for access token.
+     * Get supplier bank account info.
      */
-    public function mercadoPagoCallback(Request $request): JsonResponse
+    public function getBankAccount(Request $request): JsonResponse
     {
-        $request->validate([
-            'code' => 'required|string',
-            'state' => 'required|uuid',
-        ]);
-
-        $supplier = Supplier::findOrFail($request->input('state'));
-
-        try {
-            $response = Http::post('https://api.mercadopago.com/oauth/token', [
-                'client_id' => config('services.mercadopago.client_id'),
-                'client_secret' => config('services.mercadopago.client_secret'),
-                'grant_type' => 'authorization_code',
-                'code' => $request->input('code'),
-                'redirect_uri' => config('services.mercadopago.redirect_uri'),
-            ]);
-
-            if (! $response->successful()) {
-                Log::error('MP OAuth error', ['response' => $response->json()]);
-                return $this->error('Falha na autorização do Mercado Pago.', 422);
-            }
-
-            $data = $response->json();
-
-            $supplier->update([
-                'mp_access_token' => $data['access_token'],
-                'mp_refresh_token' => $data['refresh_token'] ?? null,
-                'mp_user_id' => $data['user_id'] ?? null,
-            ]);
-
-            return $this->success(['connected' => true], 'Mercado Pago conectado com sucesso.');
-        } catch (\Throwable $e) {
-            Log::error('MP OAuth exception', ['error' => $e->getMessage()]);
-            return $this->error('Erro ao conectar Mercado Pago.', 500);
+        $supplier = $request->user()->supplier;
+        if (!$supplier) {
+            return $this->error('Perfil de fornecedor não encontrado.', 404);
         }
+
+        $bankAccount = $supplier->bankAccount;
+        if (!$bankAccount) {
+            return $this->error('Nenhuma conta bancária cadastrada.', 404);
+        }
+
+        return $this->success([
+            'id' => $bankAccount->id,
+            'bank_code' => $bankAccount->bank_code,
+            'agencia' => $bankAccount->agencia,
+            'agencia_dv' => $bankAccount->agencia_dv,
+            'type' => $bankAccount->type,
+            'document_type' => $bankAccount->document_type,
+            'legal_name' => $bankAccount->legal_name,
+            'has_recipient' => !empty($supplier->pagarme_recipient_id),
+        ]);
     }
 }

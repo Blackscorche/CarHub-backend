@@ -80,8 +80,8 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
         Route::post('/logo', [SupplierController::class, 'uploadLogo']);
         Route::get('/balance', [PaymentController::class, 'supplierBalance']);
         Route::get('/transactions', [PaymentController::class, 'supplierTransactions']);
-        Route::get('/connect-mercadopago', [SupplierController::class, 'connectMercadoPago']);
-        Route::get('/mercadopago-callback', [SupplierController::class, 'mercadoPagoCallback']);
+        Route::post('/bank-account', [SupplierController::class, 'registerBankAccount']);
+        Route::get('/bank-account', [SupplierController::class, 'getBankAccount']);
     });
 
     // Catalog management (supplier only)
