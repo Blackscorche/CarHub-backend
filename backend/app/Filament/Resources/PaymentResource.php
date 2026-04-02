@@ -4,6 +4,8 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\PaymentResource\Pages;
 use App\Models\Payment;
+use App\Services\PaymentService;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -79,7 +81,30 @@ class PaymentResource extends Resource
                         'boleto' => 'Boleto',
                     ])->label('Método'),
             ])
-            ->actions([]);
+            ->actions([
+                Tables\Actions\Action::make('release')
+                    ->label('Liberar')
+                    ->icon('heroicon-o-banknotes')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->modalDescription(fn (Payment $record) => "Liberar R$ {$record->supplier_amount} ao fornecedor?")
+                    ->visible(fn (Payment $record) => $record->status === 'held')
+                    ->action(function (Payment $record) {
+                        app(PaymentService::class)->releasePayment($record);
+                        Notification::make()->title('Pagamento liberado.')->success()->send();
+                    }),
+                Tables\Actions\Action::make('refund')
+                    ->label('Reembolsar')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->modalDescription(fn (Payment $record) => "Reembolsar R$ {$record->amount} ao cliente?")
+                    ->visible(fn (Payment $record) => in_array($record->status, ['held', 'released']))
+                    ->action(function (Payment $record) {
+                        app(PaymentService::class)->refund($record);
+                        Notification::make()->title('Reembolso processado.')->success()->send();
+                    }),
+            ]);
     }
 
     public static function getPages(): array

@@ -169,13 +169,13 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
         Route::put('/milestones/{milestone}/resolve', [MilestoneController::class, 'adminResolve']);
     });
 
-    // Disputes — MVP에서 제외
-    // Route::get('/disputes', [DisputeController::class, 'index']);
-    // Route::get('/disputes/{dispute}', [DisputeController::class, 'show']);
-    // Route::post('/disputes', [DisputeController::class, 'store']);
-    // Route::middleware('role:admin')->group(function () {
-    //     Route::put('/disputes/{dispute}/resolve', [DisputeController::class, 'resolve']);
-    // });
+    // Disputes
+    Route::get('/disputes', [DisputeController::class, 'index']);
+    Route::get('/disputes/{dispute}', [DisputeController::class, 'show']);
+    Route::post('/disputes', [DisputeController::class, 'store']);
+    Route::middleware('role:admin')->group(function () {
+        Route::put('/disputes/{dispute}/resolve', [DisputeController::class, 'resolve']);
+    });
 
     // Schedules
     Route::get('/schedules', [ScheduleController::class, 'index']);

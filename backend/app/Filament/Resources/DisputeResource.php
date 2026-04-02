@@ -17,10 +17,17 @@ class DisputeResource extends Resource
     protected static ?string $navigationLabel = 'Disputas';
     protected static ?int $navigationSort = 6;
 
-    // MVP에서 분쟁 기능 제외 — 관리자 패널에서 숨김
-    public static function shouldRegisterNavigation(): bool
+    protected static ?string $navigationBadgeTooltip = 'Disputas abertas';
+
+    public static function getNavigationBadge(): ?string
     {
-        return false;
+        $count = Dispute::whereIn('status', ['open', 'under_review'])->count();
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'danger';
     }
 
     public static function form(Form $form): Form
@@ -85,6 +92,25 @@ class DisputeResource extends Resource
                         'resolved_released' => 'Resolvida (Liberado)',
                         'closed' => 'Fechada',
                     ])->label('Status'),
+                Tables\Filters\SelectFilter::make('category')
+                    ->options([
+                        'quality' => 'Qualidade',
+                        'incomplete' => 'Incompleto',
+                        'overcharge' => 'Cobrança indevida',
+                        'no_show' => 'Não compareceu',
+                        'damage' => 'Dano',
+                        'other' => 'Outro',
+                    ])->label('Categoria'),
+                Tables\Filters\Filter::make('created_at')
+                    ->form([
+                        Forms\Components\DatePicker::make('from')->label('De'),
+                        Forms\Components\DatePicker::make('until')->label('Até'),
+                    ])
+                    ->query(function ($query, array $data) {
+                        return $query
+                            ->when($data['from'], fn ($q, $date) => $q->whereDate('created_at', '>=', $date))
+                            ->when($data['until'], fn ($q, $date) => $q->whereDate('created_at', '<=', $date));
+                    })->label('Período'),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
