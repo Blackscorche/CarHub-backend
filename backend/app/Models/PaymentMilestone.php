@@ -12,26 +12,32 @@ class PaymentMilestone extends Model
 
     protected $fillable = [
         'order_id',
-        'stage',
-        'title',
-        'percentage',
+        'sequence',
         'amount',
+        'percentage',
+        'pagarme_charge_id',
         'status',
+        'is_final',
         'evidence_urls',
         'evidence_description',
-        'evidence_submitted_at',
+        'paid_at',
+        'delivered_at',
         'approved_at',
+        'declined_at',
         'released_at',
         'contested_at',
         'contest_reason',
     ];
 
     protected $casts = [
-        'percentage' => 'decimal:2',
         'amount' => 'decimal:2',
+        'percentage' => 'decimal:2',
+        'is_final' => 'boolean',
         'evidence_urls' => 'array',
-        'evidence_submitted_at' => 'datetime',
+        'paid_at' => 'datetime',
+        'delivered_at' => 'datetime',
         'approved_at' => 'datetime',
+        'declined_at' => 'datetime',
         'released_at' => 'datetime',
         'contested_at' => 'datetime',
     ];
@@ -41,23 +47,42 @@ class PaymentMilestone extends Model
         return $this->belongsTo(Order::class);
     }
 
-    public function isPending(): bool
+    public function isPaid(): bool
     {
-        return $this->status === 'pending';
+        return $this->status === 'paid';
     }
 
-    public function isReleased(): bool
+    public function isDelivered(): bool
     {
-        return $this->status === 'released';
+        return $this->status === 'delivered';
     }
 
-    public function isDisputed(): bool
+    public function isApproved(): bool
     {
-        return $this->status === 'disputed';
+        return $this->status === 'approved';
+    }
+
+    public function isDeclined(): bool
+    {
+        return $this->status === 'declined';
+    }
+
+    public function isContested(): bool
+    {
+        return $this->status === 'contested';
     }
 
     public function hasEvidence(): bool
     {
-        return !empty($this->evidence_urls) && $this->evidence_submitted_at !== null;
+        return !empty($this->evidence_urls) && $this->delivered_at !== null;
+    }
+
+    public function isInContestationWindow(): bool
+    {
+        if (!$this->is_final || !$this->approved_at) {
+            return false;
+        }
+
+        return now()->diffInHours($this->approved_at) < 48;
     }
 }
