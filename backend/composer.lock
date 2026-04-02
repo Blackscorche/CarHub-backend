@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "d03b9f773fd42083638d6230bc5962f3",
+    "content-hash": "400c3f38186221f56688650ff8d5fbba",
     "packages": [
         {
             "name": "anourvalar/eloquent-serialize",
@@ -4076,6 +4076,54 @@
                 }
             ],
             "time": "2025-09-03T16:03:54+00:00"
+        },
+        {
+            "name": "pagarme/pagarme-php",
+            "version": "v4.4.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/pagarme/pagarme-php.git",
+                "reference": "5751f86f6e7cf15c0a5f3c74fe4ef94845dbf695"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/pagarme/pagarme-php/zipball/5751f86f6e7cf15c0a5f3c74fe4ef94845dbf695",
+                "reference": "5751f86f6e7cf15c0a5f3c74fe4ef94845dbf695",
+                "shasum": ""
+            },
+            "require": {
+                "guzzlehttp/guzzle": ">=6.3",
+                "php": ">=5.6.0"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^5.7",
+                "squizlabs/php_codesniffer": "^3.3"
+            },
+            "type": "lib",
+            "autoload": {
+                "psr-4": {
+                    "PagarMe\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "Pagar.Me PHP Library",
+            "homepage": "http://pagar.me",
+            "keywords": [
+                "api",
+                "pagamento brasil",
+                "pagamentos",
+                "pagar.me",
+                "pagarme",
+                "payments brazil"
+            ],
+            "support": {
+                "issues": "https://github.com/pagarme/pagarme-php/issues",
+                "source": "https://github.com/pagarme/pagarme-php/tree/v4.4.0"
+            },
+            "time": "2024-08-02T23:27:07+00:00"
         },
         {
             "name": "phpoption/phpoption",
