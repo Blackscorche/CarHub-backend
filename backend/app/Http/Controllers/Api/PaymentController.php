@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Services\PagarmeClient;
 use App\Services\PaymentService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -72,32 +73,17 @@ class PaymentController extends Controller
     }
 
     /**
-     * Mercado Pago webhook endpoint.
+     * Pagar.me webhook endpoint.
      */
     public function webhook(Request $request): JsonResponse
     {
         // Verify webhook signature
-        $signature = $request->header('x-signature');
-        $requestId = $request->header('x-request-id');
+        $signature = $request->header('x-hub-signature') ?? '';
+        $pagarme = app(PagarmeClient::class);
 
-        if ($signature && $requestId) {
-            $webhookSecret = config('services.mercadopago.webhook_secret', '');
-            if ($webhookSecret) {
-                $dataId = $request->input('data.id', '');
-                $manifest = "id:{$dataId};request-id:{$requestId};";
-                $expectedHmac = hash_hmac('sha256', $manifest, $webhookSecret);
-
-                // Extract ts and v1 from signature
-                $parts = collect(explode(',', $signature))->mapWithKeys(function ($part) {
-                    [$key, $value] = explode('=', $part, 2);
-                    return [trim($key) => trim($value)];
-                });
-
-                if (isset($parts['v1']) && ! hash_equals($parts['v1'], $expectedHmac)) {
-                    Log::warning('Invalid webhook signature', ['signature' => $signature]);
-                    return response()->json(['status' => 'invalid_signature'], 401);
-                }
-            }
+        if (!$pagarme->verifyWebhookSignature($request->getContent(), $signature)) {
+            Log::warning('Invalid Pagar.me webhook signature');
+            return response()->json(['status' => 'invalid_signature'], 401);
         }
 
         try {

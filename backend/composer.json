@@ -11,7 +11,6 @@
         "laravel/framework": "^11.31",
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^2.9",
-        "mercadopago/dx-php": "^3.8",
         "pagarme/pagarme-php": "^4.4",
         "spatie/laravel-medialibrary": "^11.21",
         "spatie/laravel-permission": "^6.25"

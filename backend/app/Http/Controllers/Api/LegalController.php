@@ -72,7 +72,7 @@ Para utilizar os serviços, é necessário criar uma conta com informações ver
 - Respeitar os direitos de outros usuários
 
 5. PAGAMENTOS
-Os pagamentos são processados via Mercado Pago. A plataforma retém uma taxa de serviço sobre cada transação.
+Os pagamentos são processados via Pagar.me. A plataforma retém uma taxa de serviço sobre cada transação.
 
 6. CANCELAMENTOS E REEMBOLSOS
 Cancelamentos antes da aceitação do fornecedor geram reembolso integral. Após início do serviço, disputas devem ser abertas.
@@ -114,7 +114,7 @@ O tratamento dos dados é baseado no consentimento do usuário e na execução d
 4. COMPARTILHAMENTO
 Dados são compartilhados apenas com:
 - Fornecedores de serviço (para execução do pedido)
-- Mercado Pago (processamento de pagamentos)
+- Pagar.me (processamento de pagamentos)
 - Seguradoras (quando solicitado pelo usuário)
 
 5. DIREITOS DO TITULAR

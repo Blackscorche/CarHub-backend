@@ -24,10 +24,10 @@ class PaymentResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('gateway_transaction_id')
+                Tables\Columns\TextColumn::make('pagarme_charge_id')
                     ->searchable()
                     ->limit(20)
-                    ->label('ID Transação'),
+                    ->label('ID Pagar.me'),
                 Tables\Columns\TextColumn::make('order.order_number')
                     ->searchable()
                     ->label('Pedido'),
