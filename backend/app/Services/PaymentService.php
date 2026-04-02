@@ -21,6 +21,8 @@ class PaymentService
 
     public function createPixPayment(Order $order, string $type = 'full'): array
     {
+        $order->loadMissing(['items', 'customer', 'supplier']);
+
         $amount = $this->resolveAmount($order, $type);
         $split = $this->calculateSplit($order, $amount);
         $idempotencyKey = "pix-{$order->id}-{$type}";
@@ -69,23 +71,29 @@ class PaymentService
 
     // ─── Card Payment ────────────────────────────────────────
 
-    public function createCardPayment(Order $order, string $cardToken, string $type = 'full', int $installments = 1): array
+    public function createCardPayment(Order $order, string $cardToken, string $type = 'full', int $installments = 1, string $cardType = 'credit_card'): array
     {
+        $order->loadMissing(['items', 'customer', 'supplier']);
+
         $amount = $this->resolveAmount($order, $type);
         $split = $this->calculateSplit($order, $amount);
         $idempotencyKey = "card-{$order->id}-{$type}";
+
+        $cardData = [
+            'card_token' => $cardToken,
+            'statement_descriptor' => 'CARHUB',
+        ];
+        if ($cardType === 'credit_card') {
+            $cardData['installments'] = $installments;
+        }
 
         $payload = [
             'items' => $this->buildItems($order),
             'customer' => $this->buildCustomer($order),
             'payments' => [
                 [
-                    'payment_method' => 'credit_card',
-                    'credit_card' => [
-                        'card_token' => $cardToken,
-                        'installments' => $installments,
-                        'statement_descriptor' => 'CARHUB',
-                    ],
+                    'payment_method' => $cardType,
+                    $cardType => $cardData,
                     'amount' => (int) round($amount * 100),
                     'split' => $this->buildSplit($order, $split),
                 ],
@@ -103,7 +111,7 @@ class PaymentService
             'amount' => $amount,
             'platform_fee' => $split['platform_fee'],
             'supplier_amount' => $split['supplier_amount'],
-            'method' => 'credit_card',
+            'method' => $cardType,
             'type' => $type,
             'status' => $status,
             'pagarme_charge_id' => $charge['id'] ?? null,
@@ -152,6 +160,7 @@ class PaymentService
             ]);
 
             if ($newStatus === 'held') {
+                $payment->loadMissing('order');
                 $this->updateOrderAfterPayment($payment->order, $payment->type);
                 event(new \App\Events\OrderPaid($payment->order));
             }
@@ -162,6 +171,10 @@ class PaymentService
 
     public function refund(Payment $payment, ?float $amount = null): void
     {
+        if (!$payment->pagarme_charge_id) {
+            throw new \RuntimeException('Pagamento sem ID de cobrança no Pagar.me.');
+        }
+
         $refundAmountCents = (int) round(($amount ?? $payment->amount) * 100);
 
         $this->pagarme->post("/charges/{$payment->pagarme_charge_id}/refunds", [
@@ -178,17 +191,26 @@ class PaymentService
 
     public function manualWithdraw(string $recipientId, float $amount): array
     {
-        $response = $this->pagarme->post("/recipients/{$recipientId}/withdrawals", [
-            'amount' => (int) round($amount * 100),
-        ]);
+        try {
+            $response = $this->pagarme->post("/recipients/{$recipientId}/withdrawals", [
+                'amount' => (int) round($amount * 100),
+            ]);
 
-        Log::info('Pagar.me manual withdrawal', [
-            'recipient_id' => $recipientId,
-            'amount' => $amount,
-            'response_id' => $response['id'] ?? null,
-        ]);
+            Log::info('Pagar.me manual withdrawal', [
+                'recipient_id' => $recipientId,
+                'amount' => $amount,
+                'response_id' => $response['id'] ?? null,
+            ]);
 
-        return $response;
+            return $response;
+        } catch (\Throwable $e) {
+            Log::error('Pagar.me manual withdrawal failed', [
+                'recipient_id' => $recipientId,
+                'amount' => $amount,
+                'error' => $e->getMessage(),
+            ]);
+            throw new \RuntimeException('Erro ao realizar saque para o fornecedor.');
+        }
     }
 
     // ─── Release Payment ─────────────────────────────────────
@@ -258,23 +280,37 @@ class PaymentService
     protected function buildCustomer(Order $order): array
     {
         $user = $order->customer;
+        $cpf = $user->cpf ? preg_replace('/\D/', '', $user->cpf) : null;
+
+        if (!$cpf) {
+            throw new \RuntimeException('Cliente deve ter CPF cadastrado para realizar pagamento.');
+        }
+
         return [
             'name' => $user->name,
             'email' => $user->email,
             'type' => 'individual',
-            'document' => $user->cpf ?? '00000000000',
+            'document' => $cpf,
             'document_type' => 'CPF',
         ];
     }
 
     protected function buildSplit(Order $order, array $split): array
     {
-        $splits = [];
-
-        // Supplier portion
         $supplier = $order->supplier;
-        if ($supplier->pagarme_recipient_id) {
-            $splits[] = [
+        $platformRecipientId = config('services.pagarme.platform_recipient_id');
+
+        if (!$supplier->pagarme_recipient_id) {
+            throw new \RuntimeException('Fornecedor não possui cadastro no Pagar.me. Solicite que ele registre seus dados bancários.');
+        }
+
+        if (!$platformRecipientId) {
+            throw new \RuntimeException('Platform recipient ID não configurado.');
+        }
+
+        return [
+            // Supplier portion
+            [
                 'amount' => (int) round($split['supplier_amount'] * 100),
                 'recipient_id' => $supplier->pagarme_recipient_id,
                 'type' => 'flat',
@@ -283,13 +319,9 @@ class PaymentService
                     'charge_processing_fee' => true,
                     'charge_remainder_fee' => false,
                 ],
-            ];
-        }
-
-        // Platform portion
-        $platformRecipientId = config('services.pagarme.platform_recipient_id');
-        if ($platformRecipientId) {
-            $splits[] = [
+            ],
+            // Platform portion
+            [
                 'amount' => (int) round($split['platform_fee'] * 100),
                 'recipient_id' => $platformRecipientId,
                 'type' => 'flat',
@@ -298,10 +330,8 @@ class PaymentService
                     'charge_processing_fee' => false,
                     'charge_remainder_fee' => true,
                 ],
-            ];
-        }
-
-        return $splits;
+            ],
+        ];
     }
 
     protected function resolveAmount(Order $order, string $type): float
