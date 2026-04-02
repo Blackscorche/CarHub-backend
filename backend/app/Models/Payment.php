@@ -13,7 +13,7 @@ class Payment extends Model
     protected $fillable = [
         'order_id', 'payer_id', 'amount', 'platform_fee',
         'supplier_amount', 'method', 'type', 'status',
-        'gateway_transaction_id', 'gateway_response',
+        'pagarme_charge_id', 'gateway_response',
         'hold_until', 'released_at', 'refunded_at',
     ];
 

@@ -14,7 +14,7 @@ class Order extends Model
 
     protected $fillable = [
         'order_number', 'customer_id', 'supplier_id', 'vehicle_id',
-        'type', 'status', 'subtotal', 'platform_fee', 'total',
+        'type', 'payment_model', 'status', 'subtotal', 'platform_fee', 'total',
         'partial_payment_amount', 'remaining_amount', 'commission_rate',
         'payment_method', 'delivery_type', 'delivery_address_id',
         'confirmation_code', 'notes', 'scheduled_at',
@@ -92,5 +92,20 @@ class Order extends Model
     public function dispute(): HasOne
     {
         return $this->hasOne(Dispute::class);
+    }
+
+    public function milestones(): HasMany
+    {
+        return $this->hasMany(PaymentMilestone::class)->orderBy('stage');
+    }
+
+    public function isMilestone(): bool
+    {
+        return $this->payment_model === 'milestone';
+    }
+
+    public function isInstant(): bool
+    {
+        return $this->payment_model === 'instant';
     }
 }

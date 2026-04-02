@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 
 class Supplier extends Model
@@ -19,13 +20,10 @@ class Supplier extends Model
         'service_radius_km', 'address_id', 'latitude', 'longitude',
         'opening_hours', 'avg_rating', 'total_ratings',
         'is_verified', 'kyc_document_url', 'approval_status',
-        'approved_at', 'payment_gateway_id', 'insurance_partners',
-        'mp_access_token', 'mp_refresh_token', 'mp_user_id',
+        'approved_at', 'pagarme_recipient_id', 'insurance_partners',
     ];
 
-    protected $hidden = [
-        'mp_access_token', 'mp_refresh_token',
-    ];
+    protected $hidden = [];
 
     protected function casts(): array
     {
@@ -74,6 +72,11 @@ class Supplier extends Model
     public function insuranceTags(): HasMany
     {
         return $this->hasMany(SupplierInsuranceTag::class);
+    }
+
+    public function bankAccount(): HasOne
+    {
+        return $this->hasOne(SupplierBankAccount::class);
     }
 
     public function scopeNearby(Builder $query, float $lat, float $lng, float $radiusKm = 50): Builder
