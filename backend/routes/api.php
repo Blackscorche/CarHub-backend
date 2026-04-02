@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\QuoteController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ScheduleController;
+use App\Http\Controllers\Api\MilestoneController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\VehicleController;
 use Illuminate\Support\Facades\Route;
@@ -153,8 +154,22 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
         Route::post('/reviews', [ReviewController::class, 'store']);
     });
 
-    // Disputes — MVP에서 제외 (MP Split Payment 정산 후 자동환불 불가)
-    // 후속 버전에서 구현 예정. 현재는 고객지원 이메일로 수동 처리.
+    // Milestones (service orders — flexible payment flow)
+    Route::get('/orders/{order}/milestones', [MilestoneController::class, 'index']);
+    Route::middleware('role:customer')->group(function () {
+        Route::post('/orders/{order}/milestones/pay', [MilestoneController::class, 'pay']);
+        Route::put('/milestones/{milestone}/approve', [MilestoneController::class, 'approve']);
+        Route::put('/milestones/{milestone}/decline', [MilestoneController::class, 'decline']);
+        Route::put('/milestones/{milestone}/contest', [MilestoneController::class, 'contest']);
+    });
+    Route::middleware('role:supplier')->group(function () {
+        Route::post('/milestones/{milestone}/evidence', [MilestoneController::class, 'submitEvidence']);
+    });
+    Route::middleware('role:admin')->group(function () {
+        Route::put('/milestones/{milestone}/resolve', [MilestoneController::class, 'adminResolve']);
+    });
+
+    // Disputes — MVP에서 제외
     // Route::get('/disputes', [DisputeController::class, 'index']);
     // Route::get('/disputes/{dispute}', [DisputeController::class, 'show']);
     // Route::post('/disputes', [DisputeController::class, 'store']);
