@@ -28,6 +28,7 @@ class OrderService
         return DB::transaction(function () use ($data, $customerId) {
             $subtotal = 0;
             $orderItems = [];
+            $hasService = false;
 
             foreach ($data['items'] as $itemData) {
                 $catalogItem = CatalogItem::where('id', $itemData['catalog_item_id'])
@@ -39,6 +40,10 @@ class OrderService
                     throw new \InvalidArgumentException(
                         "O item \"{$catalogItem->name}\" requer orçamento."
                     );
+                }
+
+                if ($catalogItem->type === 'service') {
+                    $hasService = true;
                 }
 
                 $unitPrice = $catalogItem->price;
@@ -93,12 +98,15 @@ class OrderService
             }
             $orderNumber = $todayPrefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
 
+            $paymentModel = $hasService ? 'milestone' : 'instant';
+
             $order = Order::create([
                 'order_number' => $orderNumber,
                 'customer_id' => $customerId,
                 'supplier_id' => $data['supplier_id'],
                 'vehicle_id' => $data['vehicle_id'] ?? null,
                 'type' => 'direct',
+                'payment_model' => $paymentModel,
                 'status' => 'pending',
                 'subtotal' => $subtotal,
                 'platform_fee' => $platformFee,
@@ -150,6 +158,7 @@ class OrderService
                 'supplier_id' => $data['supplier_id'],
                 'vehicle_id' => $data['vehicle_id'] ?? null,
                 'type' => 'quote',
+                'payment_model' => 'milestone', // quotes are always for services
                 'status' => 'awaiting_quote',
                 'subtotal' => 0,
                 'platform_fee' => 0,
@@ -200,6 +209,12 @@ class OrderService
 
     public function payOrder(Order $order): Order
     {
+        if ($order->isMilestone()) {
+            throw new \InvalidArgumentException(
+                'Pedidos com pagamento por etapas devem usar a rota de milestones.'
+            );
+        }
+
         $this->ensureStatus($order, ['accepted']);
 
         $order->update(['status' => 'paid']);
@@ -211,7 +226,11 @@ class OrderService
 
     public function startOrder(Order $order): Order
     {
-        $this->ensureStatus($order, ['paid']);
+        $allowedStatuses = $order->isMilestone()
+            ? ['paid', 'partially_paid']  // milestone: can start after first payment
+            : ['paid'];                    // instant: must be fully paid
+
+        $this->ensureStatus($order, $allowedStatuses);
 
         $order->update([
             'status' => 'in_progress',
@@ -247,6 +266,10 @@ class OrderService
 
         $order->update(['status' => 'confirmed']);
 
+        // For milestone orders: the final milestone's 48h contestation is handled
+        // by MilestoneService when customer approves the last evidence.
+        // OrderConfirmed event handles instant payment release.
+
         event(new OrderConfirmed($order));
 
         return $order->fresh();
@@ -254,7 +277,7 @@ class OrderService
 
     public function cancelOrder(Order $order, string $reason, string $cancelledBy): Order
     {
-        $cancellable = ['pending', 'created', 'paid', 'awaiting_quote', 'quote_sent', 'accepted'];
+        $cancellable = ['pending', 'created', 'paid', 'partially_paid', 'awaiting_quote', 'quote_sent', 'accepted'];
         $this->ensureStatus($order, $cancellable);
 
         $order->update([
