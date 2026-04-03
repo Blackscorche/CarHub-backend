@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\PlatformConfig;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -399,13 +400,17 @@ class PaymentService
 
     protected function getHoldPeriodHours(): int
     {
-        $config = PlatformConfig::where('key', 'hold_period_hours')->first();
-        return $config ? (int) ($config->value['default'] ?? $config->value) : 48;
+        return Cache::remember('platform:hold_period_hours', 3600, function () {
+            $config = PlatformConfig::where('key', 'hold_period_hours')->first();
+            return $config ? (int) ($config->value['default'] ?? $config->value) : 48;
+        });
     }
 
     protected function getPartialPaymentPercent(): int
     {
-        $config = PlatformConfig::where('key', 'partial_payment_percent')->first();
-        return $config ? (int) ($config->value['default'] ?? $config->value) : 30;
+        return Cache::remember('platform:partial_payment_percent', 3600, function () {
+            $config = PlatformConfig::where('key', 'partial_payment_percent')->first();
+            return $config ? (int) ($config->value['default'] ?? $config->value) : 30;
+        });
     }
 }

@@ -8,6 +8,7 @@ use App\Services\PagarmeClient;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -89,25 +90,28 @@ class SupplierController extends Controller
 
     public function show(string $id): JsonResponse
     {
-        $supplier = Supplier::approved()
-            ->with([
-                'user:id,name,phone,avatar_url',
-                'address',
-                'catalogItems' => fn ($q) => $q->where('is_active', true),
-                'reviews' => fn ($q) => $q->latest()->limit(10)->with('customer:id,name,avatar_url'),
-                'insuranceTags',
-            ])
-            ->findOrFail($id);
+        $supplier = Cache::remember("supplier:profile:{$id}", 600, function () use ($id) {
+            $supplier = Supplier::approved()
+                ->with([
+                    'user:id,name,phone,avatar_url',
+                    'address',
+                    'catalogItems' => fn ($q) => $q->where('is_active', true),
+                    'reviews' => fn ($q) => $q->latest()->limit(10)->with('customer:id,name,avatar_url'),
+                    'insuranceTags',
+                ])
+                ->findOrFail($id);
 
-        // Add review summary
-        $supplier->review_summary = [
-            'avg_rating' => $supplier->avg_rating,
-            'total_ratings' => $supplier->total_ratings,
-            'distribution' => $supplier->reviews()
-                ->selectRaw('rating, COUNT(*) as count')
-                ->groupBy('rating')
-                ->pluck('count', 'rating'),
-        ];
+            $supplier->review_summary = [
+                'avg_rating' => $supplier->avg_rating,
+                'total_ratings' => $supplier->total_ratings,
+                'distribution' => $supplier->reviews()
+                    ->selectRaw('rating, COUNT(*) as count')
+                    ->groupBy('rating')
+                    ->pluck('count', 'rating'),
+            ];
+
+            return $supplier;
+        });
 
         return $this->success($supplier);
     }

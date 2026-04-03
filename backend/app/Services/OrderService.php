@@ -13,6 +13,7 @@ use App\Events\OrderStarted;
 use App\Models\CatalogItem;
 use App\Models\Order;
 use App\Models\PlatformConfig;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -293,9 +294,10 @@ class OrderService
 
     protected function getCommissionRate(string $supplierId): float
     {
-        $config = PlatformConfig::where('key', 'commission_rate')->first();
-
-        return $config ? (float) ($config->value['default'] ?? $config->value) : 15.00;
+        return Cache::remember('platform:commission_rate', 3600, function () {
+            $config = PlatformConfig::where('key', 'commission_rate')->first();
+            return $config ? (float) ($config->value['default'] ?? $config->value) : 15.00;
+        });
     }
 
     protected function ensureStatus(Order $order, array $allowed): void
