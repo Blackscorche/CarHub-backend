@@ -12,11 +12,11 @@ class AdminSeeder extends Seeder
     public function run(): void
     {
         User::updateOrCreate(
-            ['email' => 'admin@carhub.com.br'],
+            ['email' => 'admin@gmail.com'],
             [
                 'id' => Str::uuid(),
                 'name' => 'Admin CarHub',
-                'password' => 'admin123!@#',
+                'password' => 'password',
                 'role' => 'admin',
                 'phone' => '+5511999999999',
                 'status' => 'active',
