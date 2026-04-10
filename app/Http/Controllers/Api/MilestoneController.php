@@ -56,15 +56,44 @@ class MilestoneController extends Controller
         $request->validate([
             'percentage' => 'required|numeric|min:10|max:100',
             'payment_method' => 'required|in:pix,credit_card,debit_card',
-            'card_token' => 'required_unless:payment_method,pix|string',
+            'card_number' => 'required_unless:payment_method,pix|string',
+            'card_holder_name' => 'required_unless:payment_method,pix|string',
+            'card_expiry' => 'required_unless:payment_method,pix|string',
+            'card_cvv' => 'required_unless:payment_method,pix|string',
         ]);
 
         try {
+            $cardToken = null;
+            $method = $request->payment_method;
+
+            if ($method !== 'pix') {
+                $expiryParts = explode('/', $request->input('card_expiry', ''));
+                if (count($expiryParts) !== 2) {
+                    return $this->error('Formato de validade inválido. Use MM/AA.', 422);
+                }
+
+                $pagarme = app(\App\Services\PagarmeClient::class);
+                $tokenResponse = $pagarme->post('/tokens?appId=' . config('services.pagarme.public_key'), [
+                    'type' => 'card',
+                    'card' => [
+                        'number' => $request->input('card_number'),
+                        'holder_name' => $request->input('card_holder_name'),
+                        'exp_month' => (int) $expiryParts[0],
+                        'exp_year' => (int) ('20' . $expiryParts[1]),
+                        'cvv' => $request->input('card_cvv'),
+                    ],
+                ]);
+                $cardToken = $tokenResponse['id'] ?? null;
+                if (!$cardToken) {
+                    return $this->error('Não foi possível processar o cartão.', 422);
+                }
+            }
+
             $result = $this->milestoneService->payMilestone(
                 $order,
                 (float) $request->percentage,
-                $request->payment_method,
-                $request->card_token,
+                $method === 'debit_card' ? 'debit_card' : ($method === 'credit_card' ? 'credit_card' : 'pix'),
+                $cardToken,
             );
 
             return $this->success($result, 'Pagamento realizado com sucesso.');

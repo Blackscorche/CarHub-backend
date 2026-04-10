@@ -93,7 +93,8 @@ class PagarmeClient
     {
         $secret = config('services.pagarme.webhook_secret', '');
         if (!$secret) {
-            return true;
+            \Illuminate\Support\Facades\Log::critical('Pagar.me webhook secret not configured — rejecting webhook');
+            return false;
         }
 
         $expected = hash_hmac('sha256', $payload, $secret);

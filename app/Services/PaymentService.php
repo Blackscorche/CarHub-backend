@@ -225,34 +225,33 @@ class PaymentService
 
     public function releasePayment(Payment $payment): void
     {
-        DB::transaction(function () use ($payment) {
-            $payment->update([
-                'status' => 'released',
-                'released_at' => now(),
-            ]);
+        // Step 1: Mark payment as released (always succeeds)
+        $payment->update([
+            'status' => 'released',
+            'released_at' => now(),
+        ]);
 
-            // Trigger automatic withdrawal to supplier's bank account
-            $payment->loadMissing('order.supplier');
-            $supplier = $payment->order->supplier;
+        // Step 2: Trigger automatic withdrawal (separate, can fail and retry)
+        $payment->loadMissing('order.supplier');
+        $supplier = $payment->order->supplier;
 
-            if ($supplier && $supplier->pagarme_recipient_id && $supplier->bankAccount) {
-                try {
-                    $withdrawalService = app(WithdrawalService::class);
-                    $withdrawalService->requestWithdrawal(
-                        $supplier,
-                        (float) $payment->supplier_amount,
-                        'automatic'
-                    );
-                } catch (\Throwable $e) {
-                    // Log but don't fail the release — withdrawal can be retried
-                    Log::warning('Auto-withdrawal after release failed', [
-                        'payment_id' => $payment->id,
-                        'supplier_id' => $supplier->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
+        if ($supplier && $supplier->pagarme_recipient_id && $supplier->bankAccount) {
+            try {
+                $withdrawalService = app(WithdrawalService::class);
+                $withdrawalService->requestWithdrawal(
+                    $supplier,
+                    (float) $payment->supplier_amount,
+                    'automatic'
+                );
+            } catch (\Throwable $e) {
+                // Withdrawal failed but release is done — RetryFailedWithdrawals job will handle retry
+                Log::warning('Auto-withdrawal after release failed', [
+                    'payment_id' => $payment->id,
+                    'supplier_id' => $supplier->id,
+                    'error' => $e->getMessage(),
+                ]);
             }
-        });
+        }
     }
 
     // ─── Supplier Balance ────────────────────────────────────

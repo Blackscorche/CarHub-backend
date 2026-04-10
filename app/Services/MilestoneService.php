@@ -38,22 +38,25 @@ class MilestoneService
 
         $nextSequence = ($order->milestones->max('sequence') ?? 0) + 1;
 
-        // Temporarily override order total for this partial payment
-        $originalTotal = $order->total;
-        $order->total = $amount;
+        // Create payment via PaymentService
+        // Clone order with modified total to avoid mutating original
+        $tempOrder = $order->replicate();
+        $tempOrder->id = $order->id;
+        $tempOrder->total = $amount;
+        $tempOrder->exists = true;
 
-        try {
-            if ($paymentMethod === 'pix') {
-                $paymentResult = $this->paymentService->createPixPayment($order, 'full');
-            } else {
-                if (!$cardToken) {
-                    throw new \RuntimeException('Token do cartão é obrigatório.');
-                }
-                $paymentResult = $this->paymentService->createCardPayment($order, $cardToken, 'full', 1, $paymentMethod);
+        if ($paymentMethod === 'pix') {
+            $paymentResult = $this->paymentService->createPixPayment($tempOrder, 'full');
+        } else {
+            if (!$cardToken) {
+                throw new \RuntimeException('Token do cartão é obrigatório.');
             }
-        } finally {
-            $order->total = $originalTotal; // restore
+            $paymentResult = $this->paymentService->createCardPayment($tempOrder, $cardToken, 'full', 1, $paymentMethod);
         }
+
+        // Get the actual Pagar.me charge ID from the Payment record
+        $payment = \App\Models\Payment::find($paymentResult['payment_id'] ?? null);
+        $pagarmeChargeId = $payment?->pagarme_charge_id;
 
         // Create milestone record
         $milestone = PaymentMilestone::create([
@@ -61,7 +64,7 @@ class MilestoneService
             'sequence' => $nextSequence,
             'amount' => $amount,
             'percentage' => $actualPercentage,
-            'pagarme_charge_id' => $paymentResult['payment_id'] ?? null,
+            'pagarme_charge_id' => $pagarmeChargeId,
             'status' => 'paid',
             'is_final' => $isLastPayment,
             'paid_at' => now(),

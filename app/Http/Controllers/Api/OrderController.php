@@ -8,6 +8,7 @@ use App\Services\OrderService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class OrderController extends Controller
 {
@@ -187,7 +188,10 @@ class OrderController extends Controller
     {
         $request->validate([
             'payment_method' => 'required|in:pix,credit_card,debit_card',
-            'card_token' => 'required_if:payment_method,credit_card,debit_card|string',
+            'card_number' => 'required_if:payment_method,credit_card,debit_card|string',
+            'card_holder_name' => 'required_if:payment_method,credit_card,debit_card|string',
+            'card_expiry' => 'required_if:payment_method,credit_card,debit_card|string',
+            'card_cvv' => 'required_if:payment_method,credit_card,debit_card|string',
             'installments' => 'nullable|integer|min:1|max:12',
         ]);
 
@@ -196,8 +200,8 @@ class OrderController extends Controller
             return $this->forbidden('Acesso negado.');
         }
 
-        if ($order->status !== 'accepted') {
-            return $this->error('Pedido precisa estar aceito para pagamento.', 422);
+        if (!in_array($order->status, ['accepted', 'partially_paid'])) {
+            return $this->error('Pedido não pode ser pago neste status.', 422);
         }
 
         $order->update(['payment_method' => $request->input('payment_method')]);
@@ -209,18 +213,70 @@ class OrderController extends Controller
             if ($method === 'pix') {
                 $result = $paymentService->createPixPayment($order, 'full');
             } else {
+                // Parse card expiry (MM/YY)
+                $expiryParts = explode('/', $request->input('card_expiry', ''));
+                if (count($expiryParts) !== 2) {
+                    return $this->error('Formato de validade inválido. Use MM/AA.', 422);
+                }
+
+                // Tokenize card via Pagar.me API
+                $pagarme = app(\App\Services\PagarmeClient::class);
+                $tokenResponse = $pagarme->post('/tokens?appId=' . config('services.pagarme.public_key'), [
+                    'type' => 'card',
+                    'card' => [
+                        'number' => $request->input('card_number'),
+                        'holder_name' => $request->input('card_holder_name'),
+                        'exp_month' => (int) $expiryParts[0],
+                        'exp_year' => (int) ('20' . $expiryParts[1]),
+                        'cvv' => $request->input('card_cvv'),
+                    ],
+                ]);
+
+                $cardToken = $tokenResponse['id'] ?? null;
+                if (!$cardToken) {
+                    return $this->error('Não foi possível processar o cartão.', 422);
+                }
+
+                $cardType = $method === 'debit_card' ? 'debit_card' : 'credit_card';
+                $installments = $cardType === 'debit_card' ? 1 : $request->input('installments', 1);
+
                 $result = $paymentService->createCardPayment(
                     $order,
-                    $request->input('card_token'),
+                    $cardToken,
                     'full',
-                    $request->input('installments', 1)
+                    $installments,
+                    $cardType
                 );
             }
 
             return $this->success($result, 'Pagamento iniciado.');
         } catch (\Throwable $e) {
+            Log::error('Payment error', ['order_id' => $order->id, 'error' => $e->getMessage()]);
             return $this->error($e->getMessage(), 500);
         }
+    }
+
+    /**
+     * Get latest payment status for an order (used for PIX polling).
+     */
+    public function paymentStatus(Request $request, Order $order): JsonResponse
+    {
+        $user = $request->user();
+        if ($order->customer_id !== $user->id) {
+            return $this->forbidden('Acesso negado.');
+        }
+
+        $payment = $order->payments()->latest()->first();
+
+        if (!$payment) {
+            return $this->success(['status' => 'pending']);
+        }
+
+        return $this->success([
+            'status' => $payment->status,
+            'payment_id' => $payment->id,
+            'method' => $payment->method,
+        ]);
     }
 
     /**

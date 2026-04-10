@@ -46,6 +46,14 @@ class ReleaseAfterContestationJob implements ShouldQueue
             'amount' => $this->milestone->amount,
         ]);
 
-        $milestoneService->releaseMilestone($this->milestone);
+        try {
+            $milestoneService->releaseMilestone($this->milestone);
+        } catch (\Throwable $e) {
+            Log::error('Auto-release milestone failed', [
+                'milestone_id' => $this->milestone->id,
+                'error' => $e->getMessage(),
+            ]);
+            $this->release(300); // retry in 5 minutes
+        }
     }
 }

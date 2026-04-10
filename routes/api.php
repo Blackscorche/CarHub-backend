@@ -114,6 +114,7 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
     Route::middleware('role:customer')->group(function () {
         Route::post('/orders', [OrderController::class, 'store']);
         Route::post('/orders/{order}/pay', [OrderController::class, 'pay']);
+        Route::get('/orders/{order}/payment-status', [OrderController::class, 'paymentStatus']);
         Route::put('/orders/{order}/confirm', [OrderController::class, 'confirm']);
     });
 
