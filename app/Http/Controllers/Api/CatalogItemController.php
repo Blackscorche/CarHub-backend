@@ -8,6 +8,7 @@ use App\Models\Supplier;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 
 class CatalogItemController extends Controller
@@ -18,7 +19,13 @@ class CatalogItemController extends Controller
     {
         $supplier = Supplier::findOrFail($supplierId);
 
-        $query = $supplier->catalogItems()->where('is_active', true);
+        $user = Auth::guard('sanctum')->user();
+        $isOwner = $user && $user->supplier && $user->supplier->id === $supplier->id;
+
+        $query = $supplier->catalogItems();
+        if (!$isOwner) {
+            $query->where('is_active', true);
+        }
 
         if ($request->filled('type')) {
             $query->where('type', $request->type);

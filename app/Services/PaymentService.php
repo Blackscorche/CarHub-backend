@@ -135,6 +135,13 @@ class PaymentService
     public function handleWebhook(array $payload): void
     {
         $type = $payload['type'] ?? null;
+
+        // Route transfer events to WithdrawalService
+        if (str_starts_with($type ?? '', 'transfer.')) {
+            app(WithdrawalService::class)->handleTransferWebhook($payload);
+            return;
+        }
+
         if ($type !== 'charge.paid' && $type !== 'charge.payment_failed') {
             return;
         }
@@ -218,10 +225,34 @@ class PaymentService
 
     public function releasePayment(Payment $payment): void
     {
-        $payment->update([
-            'status' => 'released',
-            'released_at' => now(),
-        ]);
+        DB::transaction(function () use ($payment) {
+            $payment->update([
+                'status' => 'released',
+                'released_at' => now(),
+            ]);
+
+            // Trigger automatic withdrawal to supplier's bank account
+            $payment->loadMissing('order.supplier');
+            $supplier = $payment->order->supplier;
+
+            if ($supplier && $supplier->pagarme_recipient_id && $supplier->bankAccount) {
+                try {
+                    $withdrawalService = app(WithdrawalService::class);
+                    $withdrawalService->requestWithdrawal(
+                        $supplier,
+                        (float) $payment->supplier_amount,
+                        'automatic'
+                    );
+                } catch (\Throwable $e) {
+                    // Log but don't fail the release — withdrawal can be retried
+                    Log::warning('Auto-withdrawal after release failed', [
+                        'payment_id' => $payment->id,
+                        'supplier_id' => $supplier->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        });
     }
 
     // ─── Supplier Balance ────────────────────────────────────

@@ -152,6 +152,37 @@ class PaymentController extends Controller
     }
 
     /**
+     * Get supplier earnings summary.
+     */
+    public function supplierEarnings(Request $request): JsonResponse
+    {
+        $supplier = $request->user()->supplier;
+        if (!$supplier) {
+            return $this->error('Fornecedor não encontrado.', 404);
+        }
+
+        $query = fn ($days) => Payment::whereHas('order', fn ($q) => $q->where('supplier_id', $supplier->id))
+            ->whereIn('status', ['held', 'released'])
+            ->where('created_at', '>=', now()->subDays($days))
+            ->sum('supplier_amount');
+
+        $today = Payment::whereHas('order', fn ($q) => $q->where('supplier_id', $supplier->id))
+            ->whereIn('status', ['held', 'released'])
+            ->whereDate('created_at', today())
+            ->sum('supplier_amount');
+
+        $balance = $this->paymentService->getSupplierBalance($supplier->id);
+
+        return $this->success([
+            'today' => round((float) $today, 2),
+            'this_week' => round((float) $query(7), 2),
+            'this_month' => round((float) $query(30), 2),
+            'total' => round((float) $query(365), 2),
+            'balance' => $balance,
+        ]);
+    }
+
+    /**
      * Check payment status (for polling from mobile).
      */
     public function status(Request $request, Payment $payment): JsonResponse

@@ -39,6 +39,18 @@ class Supplier extends Model
         ];
     }
 
+    public function getCoverImageUrlAttribute($value): ?string
+    {
+        if (!$value) return null;
+        return str_starts_with($value, 'http') ? $value : url($value);
+    }
+
+    public function getLogoUrlAttribute($value): ?string
+    {
+        if (!$value) return null;
+        return str_starts_with($value, 'http') ? $value : url($value);
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -72,6 +84,11 @@ class Supplier extends Model
     public function insuranceTags(): HasMany
     {
         return $this->hasMany(SupplierInsuranceTag::class);
+    }
+
+    public function withdrawals(): HasMany
+    {
+        return $this->hasMany(Withdrawal::class);
     }
 
     public function bankAccount(): HasOne

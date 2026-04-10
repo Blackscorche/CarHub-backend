@@ -26,6 +26,17 @@ class CatalogItem extends Model
         ];
     }
 
+    public function getImageUrlsAttribute($value): array
+    {
+        $urls = is_string($value) ? json_decode($value, true) : ($value ?? []);
+        return array_map(function ($url) {
+            if (str_starts_with($url, 'http')) {
+                return $url;
+            }
+            return url($url);
+        }, $urls);
+    }
+
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);

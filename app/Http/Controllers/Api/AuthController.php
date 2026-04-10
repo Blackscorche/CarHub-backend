@@ -72,7 +72,16 @@ class AuthController extends Controller
             // Create address if provided
             if (!empty($validated['address'])) {
                 $address = $user->addresses()->create($validated['address']);
-                $supplier->update(['address_id' => $address->id]);
+                $supplier->update([
+                    'address_id' => $address->id,
+                    'latitude' => $request->latitude ?? null,
+                    'longitude' => $request->longitude ?? null,
+                ]);
+            } elseif ($request->latitude && $request->longitude) {
+                $supplier->update([
+                    'latitude' => $request->latitude,
+                    'longitude' => $request->longitude,
+                ]);
             }
         }
 

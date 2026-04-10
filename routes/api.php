@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\MilestoneController;
 use App\Http\Controllers\Api\SupplierController;
+use App\Http\Controllers\Api\WithdrawalController;
 use App\Http\Controllers\Api\VehicleController;
 use Illuminate\Support\Facades\Route;
 
@@ -81,8 +82,13 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
         Route::post('/logo', [SupplierController::class, 'uploadLogo']);
         Route::get('/balance', [PaymentController::class, 'supplierBalance']);
         Route::get('/transactions', [PaymentController::class, 'supplierTransactions']);
+        Route::get('/earnings', [PaymentController::class, 'supplierEarnings']);
         Route::post('/bank-account', [SupplierController::class, 'registerBankAccount']);
         Route::get('/bank-account', [SupplierController::class, 'getBankAccount']);
+        Route::post('/withdrawals', [WithdrawalController::class, 'requestWithdrawal']);
+        Route::get('/withdrawals', [WithdrawalController::class, 'index']);
+        Route::get('/withdrawals/{withdrawal}', [WithdrawalController::class, 'show']);
+        Route::get('/payouts', [WithdrawalController::class, 'index']);
     });
 
     // Catalog management (supplier only)
