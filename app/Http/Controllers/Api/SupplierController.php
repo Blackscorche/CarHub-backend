@@ -178,6 +178,7 @@ class SupplierController extends Controller
 
         $validated = $request->validate([
             'business_name' => 'sometimes|string|max:255',
+            'cnpj' => 'sometimes|nullable|string|max:14',
             'description' => 'sometimes|nullable|string',
             'category' => 'sometimes|in:mecanica,eletrica,funilaria,pneus,estetica,pecas,outros',
             'categories' => 'sometimes|array',
@@ -193,7 +194,7 @@ class SupplierController extends Controller
             'address.complement' => 'nullable|string',
             'address.neighborhood' => 'required_with:address|string',
             'address.city' => 'required_with:address|string',
-            'address.state' => 'required_with:address|string|max:2',
+            'address.state' => 'required_with:address|string|max:50',
             'address.zip_code' => 'required_with:address|string',
             'address.latitude' => 'nullable|numeric|between:-90,90',
             'address.longitude' => 'nullable|numeric|between:-180,180',
@@ -202,6 +203,19 @@ class SupplierController extends Controller
         // Handle address update
         if ($request->filled('address')) {
             $addressData = $validated['address'];
+            // Ensure state is max 2 chars (convert full name to code)
+            if (!empty($addressData['state']) && strlen($addressData['state']) > 2) {
+                $stateMap = [
+                    'Acre' => 'AC', 'Alagoas' => 'AL', 'Amapá' => 'AP', 'Amazonas' => 'AM',
+                    'Bahia' => 'BA', 'Ceará' => 'CE', 'Distrito Federal' => 'DF', 'Espírito Santo' => 'ES',
+                    'Goiás' => 'GO', 'Maranhão' => 'MA', 'Mato Grosso' => 'MT', 'Mato Grosso do Sul' => 'MS',
+                    'Minas Gerais' => 'MG', 'Pará' => 'PA', 'Paraíba' => 'PB', 'Paraná' => 'PR',
+                    'Pernambuco' => 'PE', 'Piauí' => 'PI', 'Rio de Janeiro' => 'RJ', 'Rio Grande do Norte' => 'RN',
+                    'Rio Grande do Sul' => 'RS', 'Rondônia' => 'RO', 'Roraima' => 'RR', 'Santa Catarina' => 'SC',
+                    'São Paulo' => 'SP', 'Sergipe' => 'SE', 'Tocantins' => 'TO',
+                ];
+                $addressData['state'] = $stateMap[$addressData['state']] ?? mb_substr($addressData['state'], 0, 2);
+            }
             $user = $request->user();
 
             if ($supplier->address_id) {

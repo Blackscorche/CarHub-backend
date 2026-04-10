@@ -41,7 +41,7 @@ class AuthController extends Controller
             $rules['address.number'] = 'required_with:address|string';
             $rules['address.neighborhood'] = 'required_with:address|string';
             $rules['address.city'] = 'required_with:address|string';
-            $rules['address.state'] = 'required_with:address|string|size:2';
+            $rules['address.state'] = 'required_with:address|string|max:50';
             $rules['address.zip_code'] = 'required_with:address|string';
         }
 

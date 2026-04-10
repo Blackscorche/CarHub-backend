@@ -44,10 +44,18 @@ class CouponResource extends Resource
                 ->disabled()
                 ->dehydrated(false)
                 ->label('Vezes Usado'),
-            Forms\Components\TextInput::make('category')
+            Forms\Components\Select::make('category')
+                ->options([
+                    'mecanica' => 'Mecânica',
+                    'eletrica' => 'Elétrica',
+                    'funilaria' => 'Funilaria',
+                    'pneus' => 'Pneus',
+                    'estetica' => 'Estética',
+                    'pecas' => 'Peças',
+                    'outros' => 'Outros',
+                ])
+                ->placeholder('Todas as categorias')
                 ->label('Categoria'),
-            Forms\Components\TextInput::make('region')
-                ->label('Região'),
             Forms\Components\DateTimePicker::make('valid_from')
                 ->label('Válido De'),
             Forms\Components\DateTimePicker::make('valid_until')
@@ -86,8 +94,6 @@ class CouponResource extends Resource
                     ->label('Usado'),
                 Tables\Columns\TextColumn::make('category')
                     ->label('Categoria'),
-                Tables\Columns\TextColumn::make('region')
-                    ->label('Região'),
                 Tables\Columns\TextColumn::make('valid_from')
                     ->dateTime('d/m/Y H:i')
                     ->label('Válido De'),
