@@ -17,4 +17,11 @@ class PlatformConfig extends Model
             'value' => 'array',
         ];
     }
+
+    public static function getValue(string $key, mixed $default = null): mixed
+    {
+        $config = static::where('key', $key)->first();
+        if (!$config) return $default;
+        return $config->value['default'] ?? $config->value ?? $default;
+    }
 }
