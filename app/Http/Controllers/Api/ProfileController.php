@@ -26,6 +26,7 @@ class ProfileController extends Controller
             'name' => 'sometimes|string|max:255',
             'phone' => ['sometimes', 'regex:/^(\+55)?\d{10,11}$/'],
             'cpf' => 'sometimes|nullable|string',
+            'fcm_token' => 'sometimes|nullable|string',
         ]);
 
         $user->update($validated);

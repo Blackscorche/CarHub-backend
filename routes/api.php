@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\MilestoneController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\WithdrawalController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\VehicleController;
 use Illuminate\Support\Facades\Route;
 
@@ -60,11 +61,17 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
     // Auth
     Route::delete('/auth/logout', [AuthController::class, 'logout']);
 
+    // Notifications
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+
     // Profile
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::put('/profile', [ProfileController::class, 'update']);
     Route::post('/profile/avatar', [ProfileController::class, 'uploadAvatar']);
-    Route::put('/profile/expo-push-token', [ProfileController::class, 'updatePushToken']);
+    Route::put('/profile/expo-push-token', [ProfileController::class, 'updatePushToken']); // legacy, use PUT /profile with fcm_token instead
     Route::post('/profile/delete-request', [LegalController::class, 'deleteRequest']);
 
     // Addresses

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\ChatMessage;
 use App\Models\Order;
+use App\Notifications\NewChatMessageNotification;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -102,7 +103,7 @@ class ChatController extends Controller
 
         $message->load('sender:id,name,avatar_url');
 
-        broadcast(new \App\Events\NewChatMessage($message))->toOthers();
+        $this->notifyRecipient($request->user(), $order, $message);
 
         return $this->created($message);
     }
@@ -127,9 +128,25 @@ class ChatController extends Controller
 
         $message->load('sender:id,name,avatar_url');
 
-        broadcast(new \App\Events\NewChatMessage($message))->toOthers();
+        $this->notifyRecipient($request->user(), $order, $message);
 
         return $this->created($message);
+    }
+
+    protected function notifyRecipient($sender, Order $order, ChatMessage $message): void
+    {
+        $order->loadMissing(['customer', 'supplier.user']);
+
+        // Determine recipient
+        if ($sender->id === $order->customer_id) {
+            $recipient = $order->supplier?->user;
+        } else {
+            $recipient = $order->customer;
+        }
+
+        if ($recipient) {
+            $recipient->notify(new NewChatMessageNotification($message));
+        }
     }
 
     protected function authorizeOrderAccess(Request $request, Order $order): void
