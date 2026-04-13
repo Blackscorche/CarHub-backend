@@ -32,7 +32,8 @@ class CouponController extends Controller
         $result = $this->couponService->validate(
             $request->input('code'),
             $request->input('subtotal'),
-            $request->input('supplier_id')
+            $request->input('supplier_id'),
+            $request->user()->id
         );
 
         if (! $result['valid']) {
@@ -55,5 +56,25 @@ class CouponController extends Controller
         $data = $this->cashbackService->getWalletWithTransactions($request->user()->id);
 
         return $this->success($data);
+    }
+
+    /**
+     * Get cashback balance only.
+     */
+    public function cashbackBalance(Request $request): JsonResponse
+    {
+        $balance = $this->cashbackService->getAvailableBalance($request->user()->id);
+
+        return $this->success(['balance' => $balance]);
+    }
+
+    /**
+     * Get cashback transactions.
+     */
+    public function cashbackTransactions(Request $request): JsonResponse
+    {
+        $data = $this->cashbackService->getWalletWithTransactions($request->user()->id);
+
+        return $this->success($data['transactions'] ?? []);
     }
 }

@@ -3,11 +3,12 @@
 namespace App\Services;
 
 use App\Models\Coupon;
+use App\Models\CouponUsage;
 use App\Models\Supplier;
 
 class CouponService
 {
-    public function validate(string $code, float $subtotal, ?string $supplierId = null): array
+    public function validate(string $code, float $subtotal, ?string $supplierId = null, ?string $userId = null): array
     {
         $coupon = Coupon::where('code', strtoupper($code))->first();
 
@@ -31,6 +32,14 @@ class CouponService
             return ['valid' => false, 'message' => 'Cupom esgotado.'];
         }
 
+        // Check per-user usage limit
+        if ($coupon->max_per_user && $userId) {
+            $userUsage = $coupon->userUsageCount($userId);
+            if ($userUsage >= $coupon->max_per_user) {
+                return ['valid' => false, 'message' => 'Você já utilizou este cupom o número máximo de vezes.'];
+            }
+        }
+
         if ($coupon->min_order_value && $subtotal < (float) $coupon->min_order_value) {
             return [
                 'valid' => false,
@@ -38,19 +47,16 @@ class CouponService
             ];
         }
 
+        // Check specific supplier scope
+        if ($coupon->supplier_id && $supplierId && $coupon->supplier_id !== $supplierId) {
+            return ['valid' => false, 'message' => 'Cupom não válido para este fornecedor.'];
+        }
+
         // Check category match
         if ($coupon->category && $supplierId) {
             $supplier = Supplier::find($supplierId);
             if ($supplier && $supplier->category !== $coupon->category) {
                 return ['valid' => false, 'message' => 'Cupom não válido para esta categoria.'];
-            }
-        }
-
-        // Check region match
-        if ($coupon->region && $supplierId) {
-            $supplier = Supplier::with('address')->find($supplierId);
-            if ($supplier && $supplier->address && $supplier->address->state !== $coupon->region) {
-                return ['valid' => false, 'message' => 'Cupom não válido para esta região.'];
             }
         }
 
@@ -68,8 +74,20 @@ class CouponService
         ];
     }
 
-    public function markUsed(string $code): void
+    public function markUsed(string $code, string $userId, string $orderId, float $discountApplied): void
     {
-        Coupon::where('code', strtoupper($code))->increment('used_count');
+        $coupon = Coupon::where('code', strtoupper($code))->first();
+        if (! $coupon) return;
+
+        // Increment total usage count
+        $coupon->increment('used_count');
+
+        // Record per-user usage
+        CouponUsage::create([
+            'coupon_id' => $coupon->id,
+            'user_id' => $userId,
+            'order_id' => $orderId,
+            'discount_applied' => $discountApplied,
+        ]);
     }
 }

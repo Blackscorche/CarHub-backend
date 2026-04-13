@@ -70,7 +70,8 @@ class OrderService
                 $couponResult = $this->couponService->validate(
                     $data['coupon_code'],
                     $subtotal,
-                    $data['supplier_id']
+                    $data['supplier_id'],
+                    $customerId
                 );
                 if ($couponResult['valid']) {
                     $discount = $couponResult['discount'];
@@ -130,9 +131,9 @@ class OrderService
                 $this->cashbackService->debit($customerId, $order->id, $cashbackUsed);
             }
 
-            // Increment coupon usage
+            // Record coupon usage
             if (! empty($data['coupon_code']) && $discount > 0) {
-                $this->couponService->markUsed($data['coupon_code']);
+                $this->couponService->markUsed($data['coupon_code'], $customerId, $order->id, $discount);
             }
 
             $order->load('items');

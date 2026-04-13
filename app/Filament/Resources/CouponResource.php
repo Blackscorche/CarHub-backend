@@ -38,7 +38,12 @@ class CouponResource extends Resource
                 ->label('Valor Mínimo do Pedido'),
             Forms\Components\TextInput::make('max_uses')
                 ->numeric()
-                ->label('Máximo de Usos'),
+                ->placeholder('Ilimitado')
+                ->label('Máximo de Usos (total)'),
+            Forms\Components\TextInput::make('max_per_user')
+                ->numeric()
+                ->placeholder('Ilimitado')
+                ->label('Máximo por Usuário'),
             Forms\Components\TextInput::make('used_count')
                 ->numeric()
                 ->disabled()
@@ -56,6 +61,19 @@ class CouponResource extends Resource
                 ])
                 ->placeholder('Todas as categorias')
                 ->label('Categoria'),
+            Forms\Components\Select::make('supplier_id')
+                ->relationship('supplier', 'business_name')
+                ->searchable()
+                ->placeholder('Todos os fornecedores')
+                ->label('Fornecedor Específico'),
+            Forms\Components\Select::make('funded_by')
+                ->options([
+                    'platform' => 'Plataforma',
+                    'supplier' => 'Fornecedor',
+                ])
+                ->default('platform')
+                ->required()
+                ->label('Custeado por'),
             Forms\Components\DateTimePicker::make('valid_from')
                 ->label('Válido De'),
             Forms\Components\DateTimePicker::make('valid_until')
@@ -89,11 +107,20 @@ class CouponResource extends Resource
                     ->money('BRL')
                     ->label('Pedido Mínimo'),
                 Tables\Columns\TextColumn::make('max_uses')
-                    ->label('Máx. Usos'),
+                    ->label('Máx. Total'),
+                Tables\Columns\TextColumn::make('max_per_user')
+                    ->label('Máx./Usuário'),
                 Tables\Columns\TextColumn::make('used_count')
                     ->label('Usado'),
                 Tables\Columns\TextColumn::make('category')
                     ->label('Categoria'),
+                Tables\Columns\TextColumn::make('supplier.business_name')
+                    ->label('Fornecedor')
+                    ->placeholder('Todos'),
+                Tables\Columns\TextColumn::make('funded_by')
+                    ->badge()
+                    ->color(fn (string $state): string => $state === 'platform' ? 'info' : 'warning')
+                    ->label('Custeado por'),
                 Tables\Columns\TextColumn::make('valid_from')
                     ->dateTime('d/m/Y H:i')
                     ->label('Válido De'),

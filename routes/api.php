@@ -209,6 +209,8 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
 
     // Cashback
     Route::get('/cashback', [CouponController::class, 'cashbackWallet']);
+    Route::get('/cashback/balance', [CouponController::class, 'cashbackBalance']);
+    Route::get('/cashback/transactions', [CouponController::class, 'cashbackTransactions']);
 
     // Insurance Claims
     Route::get('/insurance-claims', [InsuranceClaimController::class, 'index']);

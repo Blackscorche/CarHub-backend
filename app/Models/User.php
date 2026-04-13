@@ -45,6 +45,12 @@ class User extends Authenticatable implements FilamentUser
         ];
     }
 
+    public function getAvatarUrlAttribute($value): ?string
+    {
+        if (!$value) return null;
+        return str_starts_with($value, 'http') ? $value : url($value);
+    }
+
     public function supplier(): HasOne
     {
         return $this->hasOne(Supplier::class);

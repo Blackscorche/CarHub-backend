@@ -21,6 +21,12 @@ class ChatMessage extends Model
         ];
     }
 
+    public function getMediaUrlAttribute($value): ?string
+    {
+        if (!$value) return null;
+        return str_starts_with($value, 'http') ? $value : url($value);
+    }
+
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);

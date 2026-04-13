@@ -13,7 +13,7 @@ class PagarmeClient
     public function __construct()
     {
         $this->baseUrl = config('services.pagarme.api_url', 'https://api.pagar.me/core/v5');
-        $this->secretKey = config('services.pagarme.secret_key', '');
+        $this->secretKey = config('services.pagarme.secret_key') ?? '';
     }
 
     public function post(string $endpoint, array $data = [], ?string $idempotencyKey = null): array
