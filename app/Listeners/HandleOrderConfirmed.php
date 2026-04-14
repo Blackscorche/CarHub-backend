@@ -4,6 +4,7 @@ namespace App\Listeners;
 
 use App\Events\OrderConfirmed;
 use App\Models\AuditLog;
+use App\Notifications\OrderConfirmedNotification;
 use App\Services\CashbackService;
 use App\Services\PaymentService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -55,6 +56,17 @@ class HandleOrderConfirmed implements ShouldQueue
             'entity_id' => $order->id,
             'new_value' => ['order_number' => $order->order_number],
         ]);
+
+        // Notify supplier's user
+        try {
+            $order->loadMissing(['supplier.user']);
+            $order->supplier->user->notify(new OrderConfirmedNotification($order));
+        } catch (\Throwable $e) {
+            Log::warning('Failed to send OrderConfirmed notification', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         Log::info('Order confirmed, payments released', ['order_id' => $order->id]);
     }

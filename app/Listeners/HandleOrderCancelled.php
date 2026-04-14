@@ -4,6 +4,7 @@ namespace App\Listeners;
 
 use App\Events\OrderCancelled;
 use App\Models\AuditLog;
+use App\Notifications\OrderCancelledNotification;
 use App\Services\PaymentService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
@@ -40,6 +41,18 @@ class HandleOrderCancelled implements ShouldQueue
                 'reason' => $order->cancellation_reason,
             ],
         ]);
+
+        // Notify both customer and supplier's user
+        try {
+            $order->loadMissing(['customer', 'supplier.user']);
+            $order->customer->notify(new OrderCancelledNotification($order));
+            $order->supplier->user->notify(new OrderCancelledNotification($order));
+        } catch (\Throwable $e) {
+            Log::warning('Failed to send OrderCancelled notification', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         Log::info('Order cancelled', ['order_id' => $order->id, 'by' => $event->cancelledBy]);
     }

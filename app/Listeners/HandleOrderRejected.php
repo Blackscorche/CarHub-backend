@@ -4,6 +4,7 @@ namespace App\Listeners;
 
 use App\Events\OrderRejected;
 use App\Models\AuditLog;
+use App\Notifications\OrderRejectedNotification;
 use App\Services\PaymentService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
@@ -39,6 +40,17 @@ class HandleOrderRejected implements ShouldQueue
                 'reason' => $order->cancellation_reason,
             ],
         ]);
+
+        // Notify customer
+        try {
+            $order->loadMissing(['customer']);
+            $order->customer->notify(new OrderRejectedNotification($order));
+        } catch (\Throwable $e) {
+            Log::warning('Failed to send OrderRejected notification', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         Log::info('Order rejected, refund triggered', ['order_id' => $order->id]);
     }

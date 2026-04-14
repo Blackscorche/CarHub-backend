@@ -10,6 +10,9 @@ use App\Events\OrderCreated;
 use App\Events\OrderRejected;
 use App\Events\OrderPaid;
 use App\Events\OrderStarted;
+use App\Events\EvidenceUploaded;
+use App\Events\MilestoneApproved;
+use App\Events\MilestoneReleased;
 use App\Listeners\HandleOrderAccepted;
 use App\Listeners\HandleOrderCancelled;
 use App\Listeners\HandleOrderCompleted;
@@ -18,6 +21,9 @@ use App\Listeners\HandleOrderCreated;
 use App\Listeners\HandleOrderPaid;
 use App\Listeners\HandleOrderRejected;
 use App\Listeners\HandleOrderStarted;
+use App\Listeners\HandleEvidenceUploaded;
+use App\Listeners\HandleMilestoneApproved;
+use App\Listeners\HandleMilestoneReleased;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
@@ -57,5 +63,8 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(OrderCompleted::class, HandleOrderCompleted::class);
         Event::listen(OrderConfirmed::class, HandleOrderConfirmed::class);
         Event::listen(OrderCancelled::class, HandleOrderCancelled::class);
+        Event::listen(EvidenceUploaded::class, HandleEvidenceUploaded::class);
+        Event::listen(MilestoneApproved::class, HandleMilestoneApproved::class);
+        Event::listen(MilestoneReleased::class, HandleMilestoneReleased::class);
     }
 }

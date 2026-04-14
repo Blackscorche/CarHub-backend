@@ -67,6 +67,21 @@ class DisputeController extends Controller
             return $dispute;
         });
 
+        // Notify both parties
+        try {
+            $order->loadMissing(['customer', 'supplier.user']);
+            $notification = new \App\Notifications\DisputeOpenedNotification($dispute);
+
+            if ($order->customer && $order->customer->id !== $user->id) {
+                $order->customer->notify($notification);
+            }
+            if ($order->supplier?->user && $order->supplier->user->id !== $user->id) {
+                $order->supplier->user->notify($notification);
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Dispute notification failed', ['error' => $e->getMessage()]);
+        }
+
         return $this->created($dispute, 'Disputa aberta com sucesso.');
     }
 
