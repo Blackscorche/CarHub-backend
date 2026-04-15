@@ -265,8 +265,9 @@ class SupplierController extends Controller
             Storage::disk('public')->delete($oldPath);
         }
 
-        $path = $request->file('cover_image')->store('suppliers/covers', 'public');
-        $supplier->update(['cover_image_url' => '/storage/' . $path]);
+        $optimizer = app(\App\Services\ImageOptimizerService::class);
+        $url = $optimizer->storeOptimized($request->file('cover_image'), 'suppliers/covers', 'public', 1920, 800, 82);
+        $supplier->update(['cover_image_url' => $url]);
 
         return $this->success(['cover_image_url' => $supplier->cover_image_url], 'Imagem de capa atualizada.');
     }
@@ -288,8 +289,9 @@ class SupplierController extends Controller
             Storage::disk('public')->delete($oldPath);
         }
 
-        $path = $request->file('logo')->store('suppliers/logos', 'public');
-        $supplier->update(['logo_url' => '/storage/' . $path]);
+        $optimizer = app(\App\Services\ImageOptimizerService::class);
+        $url = $optimizer->storeOptimized($request->file('logo'), 'suppliers/logos', 'public', 512, 512, 85);
+        $supplier->update(['logo_url' => $url]);
 
         return $this->success(['logo_url' => $supplier->logo_url], 'Logo atualizado.');
     }

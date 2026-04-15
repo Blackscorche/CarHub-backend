@@ -25,6 +25,8 @@ class Supplier extends Model
 
     protected $hidden = [];
 
+    protected $appends = ['badges'];
+
     protected function casts(): array
     {
         return [
@@ -49,6 +51,11 @@ class Supplier extends Model
     {
         if (!$value) return null;
         return str_starts_with($value, 'http') ? $value : url($value);
+    }
+
+    public function getBadgesAttribute(): array
+    {
+        return app(\App\Services\BadgeService::class)->getBadges($this);
     }
 
     public function user(): BelongsTo

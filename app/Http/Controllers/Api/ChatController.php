@@ -77,10 +77,19 @@ class ChatController extends Controller
             ->orderByDesc('created_at')
             ->paginate($request->input('limit', 50));
 
+        $user = $request->user();
+
         // Mark unread messages as read
         ChatMessage::where('order_id', $order->id)
-            ->where('sender_id', '!=', $request->user()->id)
+            ->where('sender_id', '!=', $user->id)
             ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        // Mark related chat notifications as read
+        $user->notifications()
+            ->whereNull('read_at')
+            ->where('type', \App\Notifications\NewChatMessageNotification::class)
+            ->whereJsonContains('data->data->order_id', (string) $order->id)
             ->update(['read_at' => now()]);
 
         return $this->success($messages);

@@ -30,6 +30,61 @@ class LegalController extends Controller
         ]);
     }
 
+    /**
+     * LGPD Art. 18 — Data portability / export.
+     * Returns all user data in a structured JSON.
+     */
+    public function exportData(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $user->loadMissing(['supplier', 'addresses', 'vehicles']);
+
+        $data = [
+            'exported_at' => now()->toIso8601String(),
+            'legal_basis' => 'LGPD Art. 18, II — Portabilidade dos dados',
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'cpf' => $user->cpf,
+                'role' => $user->role,
+                'avatar_url' => $user->avatar_url,
+                'status' => $user->status,
+                'lgpd_consent' => $user->lgpd_consent,
+                'lgpd_consent_at' => $user->lgpd_consent_at,
+                'terms_version' => $user->terms_version,
+                'created_at' => $user->created_at,
+            ],
+            'supplier' => $user->supplier,
+            'addresses' => $user->addresses,
+            'vehicles' => $user->vehicles,
+            'orders' => \App\Models\Order::where('customer_id', $user->id)
+                ->orWhere('supplier_id', $user->supplier?->id)
+                ->with(['items', 'payments', 'review'])
+                ->get(),
+            'chat_messages' => \App\Models\ChatMessage::where('sender_id', $user->id)->get(),
+            'reviews' => \App\Models\Review::where('customer_id', $user->id)->get(),
+            'cashback_transactions' => \App\Models\CashbackTransaction::whereHas(
+                'wallet', fn($q) => $q->where('user_id', $user->id)
+            )->get(),
+            'notifications' => $user->notifications()->get(['id', 'type', 'data', 'read_at', 'created_at']),
+            'audit_logs' => \App\Models\AuditLog::where('user_id', $user->id)
+                ->orderByDesc('created_at')->limit(100)->get(),
+        ];
+
+        AuditLog::create([
+            'user_id' => $user->id,
+            'action' => 'lgpd_data_export',
+            'entity_type' => 'users',
+            'entity_id' => $user->id,
+            'ip_address' => $request->ip(),
+        ]);
+
+        return $this->success($data, 'Dados exportados conforme LGPD Art. 18.');
+    }
+
     public function deleteRequest(Request $request): JsonResponse
     {
         $user = $request->user();

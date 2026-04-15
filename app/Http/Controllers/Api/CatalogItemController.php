@@ -129,10 +129,10 @@ class CatalogItemController extends Controller
             return $this->error('Máximo de 5 imagens por item.', 422);
         }
 
+        $optimizer = app(\App\Services\ImageOptimizerService::class);
         $newUrls = [];
         foreach ($request->file('images') as $image) {
-            $path = $image->store('catalog', 'public');
-            $newUrls[] = '/storage/' . $path;
+            $newUrls[] = $optimizer->storeOptimized($image, 'catalog', 'public', 1600, 1200, 82);
         }
 
         $item->update(['image_urls' => array_merge($existingUrls, $newUrls)]);

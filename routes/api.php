@@ -73,6 +73,7 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
     Route::post('/profile/avatar', [ProfileController::class, 'uploadAvatar']);
     Route::put('/profile/expo-push-token', [ProfileController::class, 'updatePushToken']); // legacy, use PUT /profile with fcm_token instead
     Route::post('/profile/delete-request', [LegalController::class, 'deleteRequest']);
+    Route::get('/profile/export-data', [LegalController::class, 'exportData']);
 
     // Addresses
     Route::apiResource('addresses', AddressController::class);
@@ -225,5 +226,8 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
     Route::middleware('role:admin')->group(function () {
         Route::put('/insurance-claims/{claim}/send', [InsuranceClaimController::class, 'sendToInsurer']);
         Route::put('/insurance-claims/{claim}/status', [InsuranceClaimController::class, 'updateStatus']);
+
+        // Reports (CSV export)
+        Route::get('/reports/export', [\App\Http\Controllers\Api\ReportController::class, 'exportCsv']);
     });
 });
