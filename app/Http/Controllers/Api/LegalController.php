@@ -142,7 +142,7 @@ A CarHub atua como intermediária e não se responsabiliza pela qualidade dos se
 Estes termos podem ser alterados a qualquer momento, com notificação prévia aos usuários.
 
 10. CONTATO
-suporte@carhub.com.br
+suporte@carhubrasil.com.br
 TERMS;
     }
 
@@ -187,7 +187,7 @@ Dados são mantidos enquanto a conta estiver ativa. Após solicitação de exclu
 Utilizamos criptografia e controles de acesso para proteger seus dados.
 
 8. CONTATO DO DPO
-dpo@carhub.com.br
+dpo@carhubrasil.com.br
 PRIVACY;
     }
 }

@@ -164,7 +164,7 @@ class InsuranceClaimService
                     function ($message) use ($insurerEmail, $claim) {
                         $message->to($insurerEmail)
                             ->subject("Sinistro CarHub - Protocolo {$claim->protocol_number}")
-                            ->replyTo(config('mail.from.address', 'suporte@carhub.com.br'));
+                            ->replyTo(config('mail.from.address', 'suporte@carhubrasil.com.br'));
                     }
                 );
 

@@ -12,7 +12,7 @@
         <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666">Observações</td><td style="padding:8px;border-bottom:1px solid #eee">{{ $adminNotes }}</td></tr>
         @endif
     </table>
-    <p style="color:#666">Se tiver dúvidas, entre em contato conosco pelo suporte@carhub.com.br</p>
+    <p style="color:#666">Se tiver dúvidas, entre em contato conosco pelo suporte@carhubrasil.com.br</p>
     <p style="margin-top:30px;color:#999;font-size:12px">CarHub - Sua plataforma automotiva</p>
 </body>
 </html>
