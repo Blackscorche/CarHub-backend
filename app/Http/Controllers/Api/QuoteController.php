@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Quote;
+use App\Notifications\QuoteApprovedNotification;
+use App\Notifications\QuoteReceivedNotification;
 use App\Services\OrderService;
 use App\Services\PaymentService;
 use App\Traits\ApiResponse;
@@ -118,6 +120,11 @@ class QuoteController extends Controller
             'total' => $initialPrice,
         ]);
 
+        // Notify customer that supplier sent the quote
+        if ($quote->customer) {
+            $quote->customer->notify(new QuoteReceivedNotification($quote->fresh()));
+        }
+
         return $this->success($quote->fresh(), 'Orçamento enviado.');
     }
 
@@ -153,6 +160,12 @@ class QuoteController extends Controller
             'remaining_amount' => round($order->total - $partialAmount, 2),
         ]);
 
+        // Notify supplier that customer approved the quote
+        $supplierUser = $quote->supplier?->user;
+        if ($supplierUser) {
+            $supplierUser->notify(new QuoteApprovedNotification($quote->fresh()));
+        }
+
         return $this->success([
             'quote' => $quote->fresh(),
             'order' => $order->fresh(),
@@ -182,7 +195,25 @@ class QuoteController extends Controller
             return $this->error('Este orçamento não pode ser ajustado.', 422);
         }
 
-        $finalPrice = $request->input('final_price');
+        $finalPrice = (float) $request->input('final_price');
+
+        // Enforce agreed-range adjustment (default: ±20% of initial_price).
+        $maxDeltaPercent = (float) \App\Models\PlatformConfig::getValue('quote_adjust_max_delta_percent', 20);
+        $initialPrice = (float) $quote->initial_price;
+        if ($initialPrice > 0 && $maxDeltaPercent > 0) {
+            $lower = $initialPrice * (1 - $maxDeltaPercent / 100);
+            $upper = $initialPrice * (1 + $maxDeltaPercent / 100);
+            if ($finalPrice < $lower || $finalPrice > $upper) {
+                return $this->error(
+                    sprintf(
+                        'Preço final deve estar entre R$ %.2f e R$ %.2f (±%.0f%% do orçamento inicial de R$ %.2f).',
+                        $lower, $upper, $maxDeltaPercent, $initialPrice
+                    ),
+                    422
+                );
+            }
+        }
+
         $commissionRate = (float) $quote->order->commission_rate;
         $platformFee = round($finalPrice * ($commissionRate / 100), 2);
 

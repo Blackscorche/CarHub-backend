@@ -117,7 +117,9 @@ class PaymentService
             'status' => $status,
             'pagarme_charge_id' => $charge['id'] ?? null,
             'gateway_response' => $response,
-            'hold_until' => $status === 'held' ? now()->addHours($this->getHoldPeriodHours()) : null,
+            // hold_until is set only when the supplier marks the order completed
+            // (the 48h countdown is "post-completion, pending customer confirmation").
+            'hold_until' => null,
         ]);
 
         if ($status === 'held') {
@@ -164,7 +166,8 @@ class PaymentService
             $payment->update([
                 'status' => $newStatus,
                 'gateway_response' => $chargeData,
-                'hold_until' => $newStatus === 'held' ? now()->addHours($this->getHoldPeriodHours()) : $payment->hold_until,
+                // hold_until is not set here; it is assigned when the supplier marks the order completed.
+                'hold_until' => $payment->hold_until,
             ]);
 
             if ($newStatus === 'held') {
@@ -260,6 +263,13 @@ class PaymentService
     {
         $supplier = \App\Models\Supplier::findOrFail($supplierId);
 
+        // Earliest upcoming release date across held payments for this supplier
+        // (hold_until is set by OrderService::completeOrder when the countdown starts).
+        $nextRelease = Payment::whereHas('order', fn ($q) => $q->where('supplier_id', $supplierId))
+            ->where('status', 'held')
+            ->whereNotNull('hold_until')
+            ->min('hold_until');
+
         if ($supplier->pagarme_recipient_id) {
             try {
                 $response = $this->pagarme->get("/recipients/{$supplier->pagarme_recipient_id}/balance");
@@ -267,6 +277,7 @@ class PaymentService
                     'available' => ($response['available']['amount'] ?? 0) / 100,
                     'held' => ($response['waiting_funds']['amount'] ?? 0) / 100,
                     'total' => (($response['available']['amount'] ?? 0) + ($response['waiting_funds']['amount'] ?? 0)) / 100,
+                    'next_release_at' => $nextRelease,
                 ];
             } catch (\Throwable $e) {
                 Log::warning('Failed to fetch Pagar.me balance', ['error' => $e->getMessage()]);
@@ -286,6 +297,7 @@ class PaymentService
             'available' => round((float) $released, 2),
             'held' => round((float) $held, 2),
             'total' => round((float) $held + (float) $released, 2),
+            'next_release_at' => $nextRelease,
         ];
     }
 

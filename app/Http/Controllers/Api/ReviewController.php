@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Review;
 use App\Models\Supplier;
+use App\Services\BadgeService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -72,6 +73,9 @@ class ReviewController extends Controller
 
             return $review;
         });
+
+        // Invalidate badge cache so the new rating/volume is reflected on next fetch.
+        app(BadgeService::class)->clearCache($order->supplier_id);
 
         return $this->created($review, 'Avaliação enviada com sucesso.');
     }

@@ -21,16 +21,20 @@ class ScheduleReminderNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $time = \Carbon\Carbon::parse($this->schedule->scheduled_at)->format('H:i');
+        $date = \Carbon\Carbon::parse($this->schedule->scheduled_date)->format('d/m');
+        $time = substr((string) $this->schedule->scheduled_time, 0, 5);
+        $scheduledAt = \Carbon\Carbon::parse(
+            $this->schedule->scheduled_date . ' ' . $this->schedule->scheduled_time
+        )->toIso8601String();
 
         return [
             'type' => 'schedule_reminder',
             'title' => 'Lembrete de Agendamento',
-            'body' => "Lembrete: agendamento amanhã às {$time}",
+            'body' => "Lembrete: agendamento em {$date} às {$time}",
             'data' => [
                 'schedule_id' => $this->schedule->id,
                 'order_id' => $this->schedule->order_id,
-                'scheduled_at' => $this->schedule->scheduled_at,
+                'scheduled_at' => $scheduledAt,
             ],
         ];
     }

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CashbackTransaction;
 use App\Models\CashbackWallet;
+use App\Models\Order;
 use App\Models\PlatformConfig;
 use Illuminate\Support\Facades\DB;
 
@@ -21,7 +22,11 @@ class CashbackService
 
     public function credit(string $userId, string $orderId, float $orderTotal): float
     {
-        $rate = $this->getCashbackRate();
+        // Rate can be overridden per supplier category (e.g. cashback_rate_mecanica).
+        $category = Order::where('id', $orderId)
+            ->with('supplier:id,category')
+            ->first()?->supplier?->category;
+        $rate = $this->getCashbackRate($category);
         if ($rate <= 0) {
             return 0;
         }
@@ -115,8 +120,16 @@ class CashbackService
         ];
     }
 
-    protected function getCashbackRate(): float
+    protected function getCashbackRate(?string $category = null): float
     {
+        // Category-specific rate (e.g. cashback_rate_mecanica) wins over the global default.
+        if ($category) {
+            $catConfig = PlatformConfig::where('key', "cashback_rate_{$category}")->first();
+            if ($catConfig) {
+                return (float) ($catConfig->value['default'] ?? $catConfig->value);
+            }
+        }
+
         $config = PlatformConfig::where('key', 'cashback_rate')->first();
         return $config ? (float) ($config->value['default'] ?? $config->value) : 3.0;
     }

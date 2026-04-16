@@ -60,6 +60,23 @@ class CouponService
             }
         }
 
+        // Check region scope — matches supplier's state (e.g. "SP") or city (case-insensitive).
+        // A 2-letter uppercase value is treated as a state code; anything else is matched as a city.
+        if ($coupon->region && $supplierId) {
+            $supplier = Supplier::with('address')->find($supplierId);
+            $address = $supplier?->address;
+            if ($address) {
+                $region = trim((string) $coupon->region);
+                $isStateCode = preg_match('/^[A-Z]{2}$/', $region) === 1;
+                $match = $isStateCode
+                    ? strcasecmp((string) $address->state, $region) === 0
+                    : strcasecmp((string) $address->city, $region) === 0;
+                if (! $match) {
+                    return ['valid' => false, 'message' => "Cupom válido somente na região: {$region}."];
+                }
+            }
+        }
+
         // Calculate discount
         $discount = $coupon->discount_type === 'percent'
             ? round($subtotal * ((float) $coupon->discount_value / 100), 2)

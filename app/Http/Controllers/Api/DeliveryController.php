@@ -75,15 +75,38 @@ class DeliveryController extends Controller
             'estimated_arrival' => 'nullable|date',
         ]);
 
+        $lat = (float) $request->input('latitude');
+        $lng = (float) $request->input('longitude');
+
+        // Recalculate ETA from current position to the delivery address.
+        // Fall back to the client-supplied value if we can't geocode the destination.
+        $eta = $request->input('estimated_arrival');
+        $delivery->loadMissing('order.deliveryAddress');
+        $destination = $delivery->order?->deliveryAddress;
+        if ($destination && $destination->latitude && $destination->longitude) {
+            $distanceKm = $this->haversineKm($lat, $lng, (float) $destination->latitude, (float) $destination->longitude);
+            $minutes = (int) max(1, round(($distanceKm / 45) * 60)); // avg urban speed 45 km/h
+            $eta = now()->addMinutes($minutes)->toIso8601String();
+        }
+
         $delivery->update([
-            'current_latitude' => $request->input('latitude'),
-            'current_longitude' => $request->input('longitude'),
-            'estimated_arrival' => $request->input('estimated_arrival'),
+            'current_latitude' => $lat,
+            'current_longitude' => $lng,
+            'estimated_arrival' => $eta,
         ]);
 
         broadcast(new \App\Events\DeliveryLocationUpdated($delivery))->toOthers();
 
         return $this->success($delivery->fresh());
+    }
+
+    private function haversineKm(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $earth = 6371.0;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+        return $earth * 2 * atan2(sqrt($a), sqrt(1 - $a));
     }
 
     public function show(Request $request, Order $order): JsonResponse

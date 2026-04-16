@@ -6,9 +6,12 @@ use App\Filament\Resources\DisputeResource\Pages;
 use App\Models\Dispute;
 use Filament\Forms;
 use Filament\Forms\Form;
+use App\Notifications\DisputeResolvedNotification;
+use App\Services\PaymentService;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\DB;
 
 class DisputeResource extends Resource
 {
@@ -137,12 +140,53 @@ class DisputeResource extends Resource
                             ->label('Valor do Reembolso'),
                     ])
                     ->action(function (Dispute $record, array $data) {
-                        $record->update([
-                            'status' => $data['resolution'],
-                            'resolution' => $data['resolution'],
-                            'admin_notes' => $data['admin_notes'],
-                            'resolved_at' => now(),
-                        ]);
+                        $paymentService = app(PaymentService::class);
+                        $resolution = $data['resolution'];
+
+                        DB::transaction(function () use ($record, $data, $resolution, $paymentService) {
+                            $order = $record->order;
+
+                            $record->update([
+                                'status' => $resolution,
+                                'resolution' => $resolution,
+                                'admin_notes' => $data['admin_notes'] ?? null,
+                                'resolved_at' => now(),
+                            ]);
+
+                            $heldPayments = $order->payments()->where('status', 'held')->get();
+
+                            if ($resolution === 'resolved_refund') {
+                                foreach ($heldPayments as $payment) {
+                                    $paymentService->refund($payment);
+                                }
+                                $order->update(['status' => 'refunded']);
+                            } elseif ($resolution === 'resolved_partial') {
+                                $refundAmount = $data['refund_amount'] ?? null;
+                                $firstPayment = $heldPayments->first();
+                                if ($firstPayment && $refundAmount) {
+                                    $paymentService->refund($firstPayment, (float) $refundAmount);
+                                }
+                                $order->update(['status' => 'refunded']);
+                            } elseif ($resolution === 'resolved_released') {
+                                foreach ($heldPayments as $payment) {
+                                    $paymentService->releasePayment($payment);
+                                }
+                                $order->update(['status' => 'confirmed']);
+                            } else {
+                                // closed — no payment action, just settle the order state
+                                $order->update(['status' => 'confirmed']);
+                            }
+                        });
+
+                        // Notify both parties of the resolution.
+                        $record->loadMissing(['order.customer', 'order.supplier.user']);
+                        $fresh = $record->fresh();
+                        if ($record->order?->customer) {
+                            $record->order->customer->notify(new DisputeResolvedNotification($fresh));
+                        }
+                        if ($record->order?->supplier?->user) {
+                            $record->order->supplier->user->notify(new DisputeResolvedNotification($fresh));
+                        }
                     }),
             ]);
     }

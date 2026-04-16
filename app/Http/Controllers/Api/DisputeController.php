@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Dispute;
 use App\Models\Order;
+use App\Notifications\DisputeResolvedNotification;
 use App\Services\PaymentService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -63,6 +64,12 @@ class DisputeController extends Controller
             ]);
 
             $order->update(['status' => 'disputed']);
+
+            // Freeze any held payments so the 48h auto-release job skips them
+            // until the dispute is resolved (release or refund via admin).
+            $order->payments()
+                ->where('status', 'held')
+                ->update(['hold_until' => null]);
 
             return $dispute;
         });
@@ -174,6 +181,16 @@ class DisputeController extends Controller
             }
         });
 
-        return $this->success($dispute->fresh(), 'Disputa resolvida.');
+        // Notify both parties (customer + supplier) about resolution
+        $dispute->loadMissing(['order.customer', 'order.supplier.user']);
+        $fresh = $dispute->fresh();
+        if ($dispute->order?->customer) {
+            $dispute->order->customer->notify(new DisputeResolvedNotification($fresh));
+        }
+        if ($dispute->order?->supplier?->user) {
+            $dispute->order->supplier->user->notify(new DisputeResolvedNotification($fresh));
+        }
+
+        return $this->success($fresh, 'Disputa resolvida.');
     }
 }

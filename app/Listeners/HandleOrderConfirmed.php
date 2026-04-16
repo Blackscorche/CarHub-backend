@@ -5,6 +5,7 @@ namespace App\Listeners;
 use App\Events\OrderConfirmed;
 use App\Models\AuditLog;
 use App\Notifications\OrderConfirmedNotification;
+use App\Notifications\PaymentReleasedNotification;
 use App\Services\CashbackService;
 use App\Services\PaymentService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -23,8 +24,13 @@ class HandleOrderConfirmed implements ShouldQueue
 
         // Release held payments to supplier
         $heldPayments = $order->payments()->where('status', 'held')->get();
+        $order->loadMissing('supplier.user');
+        $supplierUser = $order->supplier?->user;
         foreach ($heldPayments as $payment) {
             $this->paymentService->releasePayment($payment);
+            if ($supplierUser) {
+                $supplierUser->notify(new PaymentReleasedNotification($payment->fresh()));
+            }
         }
 
         // Credit cashback to customer

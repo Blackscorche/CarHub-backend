@@ -253,6 +253,14 @@ class OrderService
             'completed_at' => now(),
         ]);
 
+        // Start the 48h auto-release countdown for held payments on this order.
+        // If the customer confirms earlier, confirmOrder() will release immediately.
+        $holdHours = (int) PlatformConfig::getValue('payment_hold_hours', 48);
+        $order->payments()
+            ->where('status', 'held')
+            ->whereNull('hold_until')
+            ->update(['hold_until' => now()->addHours($holdHours)]);
+
         event(new OrderCompleted($order));
 
         return $order->fresh();
