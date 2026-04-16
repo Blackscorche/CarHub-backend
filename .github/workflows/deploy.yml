@@ -52,7 +52,7 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
           for i in 1 2 3 4 5; do
-            code=$(curl -sS -o /dev/null -w '%{http_code}' -H "Host: api.carhubrasil.com.br" http://$DEPLOY_HOST/api/health || echo 000)
+            code=$(curl -sS -o /dev/null -w '%{http_code}' https://api.carhubrasil.com.br/api/health || echo 000)
             if [ "$code" = "200" ]; then
               echo "Health OK (HTTP $code)"
               exit 0
