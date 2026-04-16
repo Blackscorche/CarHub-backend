@@ -11,6 +11,8 @@ use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use App\Notifications\SupplierApprovedNotification;
+use App\Notifications\SupplierRejectedNotification;
 
 class SupplierResource extends Resource
 {
@@ -40,6 +42,7 @@ class SupplierResource extends Resource
                     'pending' => 'Pendente',
                     'approved' => 'Aprovado',
                     'rejected' => 'Rejeitado',
+                    'suspended' => 'Suspenso',
                 ])->required(),
             Forms\Components\Toggle::make('is_verified')->label('Verificado'),
             Forms\Components\TextInput::make('service_radius_km')->numeric()->label('Raio de Atendimento (km)'),
@@ -77,11 +80,18 @@ class SupplierResource extends Resource
                                         'approved' => 'success',
                                         'pending' => 'warning',
                                         'rejected' => 'danger',
+                                        'suspended' => 'gray',
+                                        default => 'gray',
                                     })
                                     ->label('Status'),
                                 Infolists\Components\IconEntry::make('is_verified')->boolean()->label('Verificado'),
                                 Infolists\Components\TextEntry::make('approved_at')->dateTime('d/m/Y H:i')->label('Aprovado em'),
                                 Infolists\Components\TextEntry::make('created_at')->dateTime('d/m/Y H:i')->label('Cadastrado em'),
+                                Infolists\Components\TextEntry::make('rejected_at')->dateTime('d/m/Y H:i')->label('Rejeitado em')
+                                    ->visible(fn (Supplier $record) => !empty($record->rejected_at)),
+                                Infolists\Components\TextEntry::make('rejection_reason')->label('Motivo da rejeição')
+                                    ->columnSpanFull()
+                                    ->visible(fn (Supplier $record) => !empty($record->rejection_reason)),
                             ])->columns(4),
                         ]),
 
@@ -181,6 +191,8 @@ class SupplierResource extends Resource
                         'approved' => 'success',
                         'pending' => 'warning',
                         'rejected' => 'danger',
+                        'suspended' => 'gray',
+                        default => 'gray',
                     })
                     ->label('Status'),
                 Tables\Columns\TextColumn::make('avg_rating')->sortable()->label('Avaliação'),
@@ -189,6 +201,11 @@ class SupplierResource extends Resource
                     ->sortable()
                     ->label('Pedidos'),
                 Tables\Columns\IconColumn::make('is_verified')->boolean()->label('Verificado'),
+                Tables\Columns\IconColumn::make('kyc_submitted')
+                    ->label('KYC')
+                    ->boolean()
+                    ->getStateUsing(fn (Supplier $record) => !empty($record->kyc_document_url))
+                    ->tooltip(fn (Supplier $record) => $record->kyc_document_url ? 'Documento enviado' : 'Sem documento'),
                 Tables\Columns\TextColumn::make('created_at')->sortable()->dateTime('d/m/Y'),
             ])
             ->filters([
@@ -197,6 +214,7 @@ class SupplierResource extends Resource
                         'pending' => 'Pendente',
                         'approved' => 'Aprovado',
                         'rejected' => 'Rejeitado',
+                        'suspended' => 'Suspenso',
                     ])->label('Status'),
                 Tables\Filters\SelectFilter::make('category')
                     ->options([
@@ -222,26 +240,68 @@ class SupplierResource extends Resource
                     ->action(function (Supplier $record) {
                         $record->update(['approval_status' => 'approved', 'approved_at' => now()]);
                         $record->user->update(['status' => 'active']);
+                        $record->user->notify(new SupplierApprovedNotification($record->user));
                     }),
                 Tables\Actions\Action::make('reject')
                     ->label('Rejeitar')
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
-                    ->requiresConfirmation()
+                    ->form([
+                        Forms\Components\Textarea::make('rejection_reason')
+                            ->label('Motivo da rejeição')
+                            ->required()
+                            ->minLength(10)
+                            ->rows(4)
+                            ->placeholder('Explique por que o cadastro não foi aprovado (será enviado ao fornecedor).'),
+                    ])
                     ->visible(fn (Supplier $record) => $record->approval_status === 'pending')
-                    ->action(function (Supplier $record) {
-                        $record->update(['approval_status' => 'rejected']);
+                    ->action(function (Supplier $record, array $data) {
+                        $reason = $data['rejection_reason'];
+                        $record->update([
+                            'approval_status' => 'rejected',
+                            'rejection_reason' => $reason,
+                            'rejected_at' => now(),
+                        ]);
                         $record->user->update(['status' => 'suspended']);
+                        $record->user->notify(new SupplierRejectedNotification($record->user, $reason));
                     }),
                 Tables\Actions\Action::make('suspend')
                     ->label('Suspender')
                     ->icon('heroicon-o-no-symbol')
                     ->color('danger')
-                    ->requiresConfirmation()
+                    ->form([
+                        Forms\Components\Textarea::make('rejection_reason')
+                            ->label('Motivo da suspensão')
+                            ->required()
+                            ->minLength(10)
+                            ->rows(4),
+                    ])
                     ->visible(fn (Supplier $record) => $record->approval_status === 'approved')
-                    ->action(function (Supplier $record) {
-                        $record->update(['approval_status' => 'rejected']);
+                    ->action(function (Supplier $record, array $data) {
+                        $reason = $data['rejection_reason'];
+                        $record->update([
+                            'approval_status' => 'suspended',
+                            'rejection_reason' => $reason,
+                            'rejected_at' => now(),
+                        ]);
                         $record->user->update(['status' => 'suspended']);
+                        $record->user->notify(new SupplierRejectedNotification($record->user, $reason));
+                    }),
+                Tables\Actions\Action::make('reactivate')
+                    ->label('Reativar')
+                    ->icon('heroicon-o-arrow-uturn-up')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->visible(fn (Supplier $record) => in_array($record->approval_status, ['suspended', 'rejected']))
+                    ->action(function (Supplier $record) {
+                        $record->update([
+                            'approval_status' => 'approved',
+                            'approved_at' => $record->approved_at ?? now(),
+                            'rejection_reason' => null,
+                            'rejected_at' => null,
+                        ]);
+                        $record->user->update(['status' => 'active']);
+                        $record->user->notify(new SupplierApprovedNotification($record->user));
                     }),
             ]);
     }

@@ -20,7 +20,8 @@ class Supplier extends Model
         'service_radius_km', 'address_id', 'latitude', 'longitude',
         'opening_hours', 'avg_rating', 'total_ratings',
         'is_verified', 'kyc_document_url', 'approval_status',
-        'approved_at', 'pagarme_recipient_id', 'insurance_partners',
+        'approved_at', 'rejection_reason', 'rejected_at',
+        'pagarme_recipient_id', 'insurance_partners',
     ];
 
     protected $hidden = [];
@@ -38,6 +39,7 @@ class Supplier extends Model
             'avg_rating' => 'decimal:1',
             'is_verified' => 'boolean',
             'approved_at' => 'datetime',
+            'rejected_at' => 'datetime',
         ];
     }
 
@@ -109,9 +111,11 @@ class Supplier extends Model
             * cos(radians(longitude) - radians(?)) + sin(radians(?))
             * sin(radians(latitude))))";
 
+        // ETA: assume average urban speed of 45 km/h → minutes = distance_km / 45 * 60
         return $query
             ->select('suppliers.*')
             ->selectRaw("{$haversine} AS distance", [$lat, $lng, $lat])
+            ->selectRaw("ROUND(({$haversine} / 45) * 60) AS eta_minutes", [$lat, $lng, $lat])
             ->whereNotNull('latitude')
             ->whereNotNull('longitude')
             ->havingRaw("distance < ?", [$radiusKm]);

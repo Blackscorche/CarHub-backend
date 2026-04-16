@@ -58,6 +58,8 @@ class AuthController extends Controller
             'lgpd_consent' => true,
             'lgpd_consent_at' => now(),
             'terms_version' => $validated['terms_version'] ?? '1.0',
+            'lgpd_consent_ip' => $request->ip(),
+            'lgpd_consent_device' => substr((string) $request->userAgent(), 0, 500),
         ]);
 
         if ($validated['role'] === 'supplier') {

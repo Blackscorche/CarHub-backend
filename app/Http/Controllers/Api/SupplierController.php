@@ -79,6 +79,9 @@ class SupplierController extends Controller
                 '(SELECT MIN(price) FROM catalog_items WHERE catalog_items.supplier_id = suppliers.id AND is_active = 1 AND price IS NOT NULL) ASC'
             ),
             'distance' => $hasLocation ? $query->orderBy('distance') : $query->orderByDesc('avg_rating'),
+            'availability' => $query->orderByRaw(
+                "(SELECT COUNT(*) FROM schedules WHERE schedules.supplier_id = suppliers.id AND schedules.status = 'confirmed' AND schedules.scheduled_date = CURDATE()) ASC, avg_rating DESC"
+            ),
             default => $query->orderByDesc('avg_rating'),
         };
 
@@ -132,9 +135,11 @@ class SupplierController extends Controller
             * cos(radians(longitude) - radians(?)) + sin(radians(?))
             * sin(radians(latitude))))";
 
+        // ETA: assume average urban speed of 45 km/h → minutes = distance_km / 45 * 60
         $query = Supplier::approved()
             ->select(['id', 'business_name', 'category', 'latitude', 'longitude', 'avg_rating', 'logo_url'])
             ->selectRaw("{$haversine} AS distance", [$lat, $lng, $lat])
+            ->selectRaw("ROUND(({$haversine} / 45) * 60) AS eta_minutes", [$lat, $lng, $lat])
             ->whereNotNull('latitude')
             ->whereNotNull('longitude')
             ->havingRaw("distance < ?", [$radius]);

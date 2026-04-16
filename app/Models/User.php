@@ -12,6 +12,7 @@ use Filament\Panel;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use App\Notifications\ResetPasswordNotification;
 
 class User extends Authenticatable implements FilamentUser
 {
@@ -30,6 +31,8 @@ class User extends Authenticatable implements FilamentUser
         'lgpd_consent',
         'lgpd_consent_at',
         'terms_version',
+        'lgpd_consent_ip',
+        'lgpd_consent_device',
     ];
 
     protected $hidden = [
@@ -94,5 +97,10 @@ class User extends Authenticatable implements FilamentUser
     public function isCustomer(): bool
     {
         return $this->role === 'customer';
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new ResetPasswordNotification($token));
     }
 }
