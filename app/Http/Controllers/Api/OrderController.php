@@ -188,10 +188,7 @@ class OrderController extends Controller
     {
         $request->validate([
             'payment_method' => 'required|in:pix,credit_card,debit_card',
-            'card_number' => 'required_if:payment_method,credit_card,debit_card|string',
-            'card_holder_name' => 'required_if:payment_method,credit_card,debit_card|string',
-            'card_expiry' => 'required_if:payment_method,credit_card,debit_card|string',
-            'card_cvv' => 'required_if:payment_method,credit_card,debit_card|string',
+            'card_token' => 'required_if:payment_method,credit_card,debit_card|string',
             'installments' => 'nullable|integer|min:1|max:12',
         ]);
 
@@ -213,30 +210,9 @@ class OrderController extends Controller
             if ($method === 'pix') {
                 $result = $paymentService->createPixPayment($order, 'full');
             } else {
-                // Parse card expiry (MM/YY)
-                $expiryParts = explode('/', $request->input('card_expiry', ''));
-                if (count($expiryParts) !== 2) {
-                    return $this->error('Formato de validade inválido. Use MM/AA.', 422);
-                }
-
-                // Tokenize card via Pagar.me API
-                $pagarme = app(\App\Services\PagarmeClient::class);
-                $tokenResponse = $pagarme->post('/tokens?appId=' . config('services.pagarme.public_key'), [
-                    'type' => 'card',
-                    'card' => [
-                        'number' => $request->input('card_number'),
-                        'holder_name' => $request->input('card_holder_name'),
-                        'exp_month' => (int) $expiryParts[0],
-                        'exp_year' => (int) ('20' . $expiryParts[1]),
-                        'cvv' => $request->input('card_cvv'),
-                    ],
-                ]);
-
-                $cardToken = $tokenResponse['id'] ?? null;
-                if (!$cardToken) {
-                    return $this->error('Não foi possível processar o cartão.', 422);
-                }
-
+                // Card token comes pre-tokenized from the mobile app (via Pagar.me /tokens).
+                // Raw card data never reaches this server — PCI compliant.
+                $cardToken = $request->input('card_token');
                 $cardType = $method === 'debit_card' ? 'debit_card' : 'credit_card';
                 $installments = $cardType === 'debit_card' ? 1 : $request->input('installments', 1);
 
