@@ -89,7 +89,7 @@ class ChatController extends Controller
         $user->notifications()
             ->whereNull('read_at')
             ->where('type', \App\Notifications\NewChatMessageNotification::class)
-            ->whereJsonContains('data->data->order_id', (string) $order->id)
+            ->where('data->data->order_id', (string) $order->id)
             ->update(['read_at' => now()]);
 
         return $this->success($messages);
