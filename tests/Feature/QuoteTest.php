@@ -278,7 +278,7 @@ class QuoteTest extends TestCase
 
         $response = $this->actingAs($supplierUser)
             ->putJson("/api/quotes/{$quote->id}/adjust", [
-                'final_price' => 650.00,
+                'final_price' => 580.00,
                 'supplier_notes' => 'Peça mais cara do que esperado.',
             ]);
 
@@ -288,7 +288,7 @@ class QuoteTest extends TestCase
         $this->assertDatabaseHas('quotes', [
             'id' => $quote->id,
             'status' => 'adjusted',
-            'final_price' => 650.00,
+            'final_price' => 580.00,
         ]);
     }
 
