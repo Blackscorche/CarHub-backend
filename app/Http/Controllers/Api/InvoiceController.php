@@ -30,9 +30,7 @@ class InvoiceController extends Controller
         $path = $request->file('invoice')->store('invoices/' . $order->id, 'public');
         $invoiceUrl = Storage::url($path);
 
-        // Store invoice URL on order (using notes or a dedicated field)
-        $notes = $order->notes ?? '';
-        $order->update(['notes' => $notes . "\n[INVOICE_URL]:{$invoiceUrl}"]);
+        $order->update(['invoice_url' => $invoiceUrl]);
 
         // Send invoice to customer via email
         $customer = $order->customer;
@@ -68,14 +66,10 @@ class InvoiceController extends Controller
             }
         }
 
-        // Extract invoice URL from notes
-        $notes = $order->notes ?? '';
-        preg_match('/\[INVOICE_URL\]:(.+)/', $notes, $matches);
-
-        if (empty($matches[1])) {
+        if (!$order->invoice_url) {
             return $this->notFound('Nota fiscal não encontrada.');
         }
 
-        return $this->success(['invoice_url' => trim($matches[1])]);
+        return $this->success(['invoice_url' => $order->invoice_url]);
     }
 }

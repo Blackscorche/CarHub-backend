@@ -17,7 +17,7 @@ class Order extends Model
         'type', 'payment_model', 'status', 'subtotal', 'platform_fee', 'total',
         'partial_payment_amount', 'remaining_amount', 'commission_rate',
         'payment_method', 'delivery_type', 'delivery_address_id',
-        'confirmation_code', 'notes', 'scheduled_at',
+        'confirmation_code', 'notes', 'invoice_url', 'scheduled_at',
         'accepted_at', 'started_at', 'completed_at',
         'cancelled_at', 'cancellation_reason',
     ];
