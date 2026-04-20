@@ -15,6 +15,28 @@ class ChatController extends Controller
 {
     use ApiResponse;
 
+    public function unreadCount(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $query = ChatMessage::whereNull('read_at')
+            ->where('sender_id', '!=', $user->id);
+
+        if ($user->role === 'customer') {
+            $query->whereHas('order', fn ($q) => $q->where('customer_id', $user->id));
+        } elseif ($user->role === 'supplier') {
+            $supplier = $user->supplier;
+            if (! $supplier) {
+                return $this->success(['count' => 0]);
+            }
+            $query->whereHas('order', fn ($q) => $q->where('supplier_id', $supplier->id));
+        } else {
+            return $this->success(['count' => 0]);
+        }
+
+        return $this->success(['count' => $query->count()]);
+    }
+
     public function rooms(Request $request): JsonResponse
     {
         $user = $request->user();

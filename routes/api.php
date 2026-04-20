@@ -151,6 +151,7 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
 
     // Chat
     Route::get('/chat/rooms', [ChatController::class, 'rooms']);
+    Route::get('/chat/unread-count', [ChatController::class, 'unreadCount']);
     Route::get('/chat/{order}/messages', [ChatController::class, 'index']);
     Route::post('/chat/{order}/messages', [ChatController::class, 'store']);
     Route::post('/chat/{order}/images', [ChatController::class, 'sendImage']);
