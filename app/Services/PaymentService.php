@@ -317,6 +317,7 @@ class PaymentService
             'amount' => (int) round($item->unit_price * $item->quantity * 100),
             'description' => $item->name,
             'quantity' => $item->quantity,
+            'code' => $item->catalog_item_id ?? $item->id,
         ])->toArray();
     }
 
@@ -329,13 +330,28 @@ class PaymentService
             throw new \RuntimeException('Cliente deve ter CPF cadastrado para realizar pagamento.');
         }
 
-        return [
+        $phone = preg_replace('/\D/', '', $user->phone ?? '');
+        $customer = [
             'name' => $user->name,
             'email' => $user->email,
             'type' => 'individual',
             'document' => $cpf,
             'document_type' => 'CPF',
         ];
+
+        if (strlen($phone) >= 10) {
+            $areaCode = substr($phone, 0, 2);
+            $number = substr($phone, 2);
+            $customer['phones'] = [
+                'mobile_phone' => [
+                    'country_code' => '55',
+                    'area_code' => $areaCode,
+                    'number' => $number,
+                ],
+            ];
+        }
+
+        return $customer;
     }
 
     protected function buildSplit(Order $order, array $split): array
