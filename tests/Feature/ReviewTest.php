@@ -6,12 +6,12 @@ use App\Models\Order;
 use App\Models\Review;
 use App\Models\Supplier;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 class ReviewTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     // ─── Helpers ──────────────────────────────────────────────
 

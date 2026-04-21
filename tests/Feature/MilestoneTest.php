@@ -7,12 +7,12 @@ use App\Models\PaymentMilestone;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Services\PagarmeClient;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 class MilestoneTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     protected function createCustomer(array $overrides = []): User
     {

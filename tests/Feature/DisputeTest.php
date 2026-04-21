@@ -6,7 +6,7 @@ use App\Models\Dispute;
 use App\Models\Order;
 use App\Models\Supplier;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
@@ -16,7 +16,7 @@ use Tests\TestCase;
 #[Group('dispute')]
 class DisputeTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     // ─── Helpers ──────────────────────────────────────────────
 

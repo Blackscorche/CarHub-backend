@@ -7,12 +7,12 @@ use App\Models\CatalogItem;
 use App\Models\Review;
 use App\Models\Supplier;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 class SupplierTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     // ─── Helpers ──────────────────────────────────────────────
 
@@ -87,8 +87,9 @@ class SupplierTest extends TestCase
             ->assertJson(['success' => true]);
 
         $data = $response->json('data.data');
-        $this->assertCount(1, $data);
-        $this->assertEquals('AutoPeças Teste', $data[0]['business_name']);
+        $names = array_column($data, 'business_name');
+        $this->assertContains('AutoPeças Teste', $names);
+        $this->assertNotContains('Pending Shop', $names);
     }
 
     public function test_list_suppliers_filter_by_category(): void

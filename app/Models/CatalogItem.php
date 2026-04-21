@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Cache;
 
 class CatalogItem extends Model
 {
@@ -15,6 +16,13 @@ class CatalogItem extends Model
         'price_type', 'estimated_duration_minutes', 'category',
         'image_urls', 'is_active', 'stock_quantity', 'requires_scheduling',
     ];
+
+    protected static function booted(): void
+    {
+        $invalidate = fn (CatalogItem $c) => Cache::forget("supplier:profile:{$c->supplier_id}");
+        static::saved($invalidate);
+        static::deleted($invalidate);
+    }
 
     protected function casts(): array
     {

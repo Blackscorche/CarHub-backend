@@ -8,12 +8,12 @@ use App\Models\CashbackWallet;
 use App\Models\Coupon;
 use App\Models\Supplier;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 class CouponTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     // ─── Helpers ──────────────────────────────────────────────
 

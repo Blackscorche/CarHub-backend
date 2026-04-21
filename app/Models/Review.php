@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Cache;
 
 class Review extends Model
 {
@@ -14,6 +15,13 @@ class Review extends Model
         'order_id', 'customer_id', 'supplier_id',
         'rating', 'comment', 'media_urls',
     ];
+
+    protected static function booted(): void
+    {
+        $invalidate = fn (Review $r) => Cache::forget("supplier:profile:{$r->supplier_id}");
+        static::saved($invalidate);
+        static::deleted($invalidate);
+    }
 
     protected function casts(): array
     {
