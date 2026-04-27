@@ -66,3 +66,11 @@ coverage/
 .tmp/
 *.bak
 *.orig
+
+# Secrets & keys
+.deploy-keys/
+*.pem
+*.key
+id_rsa
+id_ed25519
+*.ppk
