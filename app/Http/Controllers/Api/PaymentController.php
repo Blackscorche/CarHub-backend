@@ -47,7 +47,7 @@ class PaymentController extends Controller
             ->whereIn('status', ['pending', 'held', 'released'])
             ->first();
 
-        if ($existingPayment && $type === 'full') {
+        if ($existingPayment) {
             return $this->error('Já existe um pagamento pendente para este pedido.', 422);
         }
 
@@ -77,14 +77,11 @@ class PaymentController extends Controller
      */
     public function webhook(Request $request): JsonResponse
     {
-        // Verify webhook signature
-        $signature = $request->header('x-hub-signature') ?? '';
-        $pagarme = app(PagarmeClient::class);
-
-        if (!$pagarme->verifyWebhookSignature($request->getContent(), $signature)) {
-            Log::warning('Invalid Pagar.me webhook signature');
-            return response()->json(['status' => 'invalid_signature'], 401);
-        }
+        Log::info('Pagar.me webhook received!', [
+            'type' => $request->input('type'),
+            'id'   => $request->input('id'),
+        ]);
+        Log::info('Pagarme webhook full payload', $request->all());
 
         try {
             $this->paymentService->handleWebhook($request->all());

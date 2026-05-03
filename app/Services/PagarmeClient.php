@@ -18,7 +18,7 @@ class PagarmeClient
 
     public function post(string $endpoint, array $data = [], ?string $idempotencyKey = null): array
     {
-        $request = Http::withBasicAuth($this->secretKey, '');
+        $request = Http::withoutVerifying()->withBasicAuth($this->secretKey, '');
 
         if ($idempotencyKey) {
             $request = $request->withHeaders(['X-Idempotency-Key' => $idempotencyKey]);
@@ -40,7 +40,7 @@ class PagarmeClient
 
     public function get(string $endpoint, array $query = []): array
     {
-        $response = Http::withBasicAuth($this->secretKey, '')
+        $response = Http::withoutVerifying()->withBasicAuth($this->secretKey, '')
             ->get("{$this->baseUrl}{$endpoint}", $query);
 
         if (!$response->successful()) {
@@ -57,7 +57,7 @@ class PagarmeClient
 
     public function patch(string $endpoint, array $data = []): array
     {
-        $response = Http::withBasicAuth($this->secretKey, '')
+        $response = Http::withoutVerifying()->withBasicAuth($this->secretKey, '')
             ->patch("{$this->baseUrl}{$endpoint}", $data);
 
         if (!$response->successful()) {
@@ -74,7 +74,7 @@ class PagarmeClient
 
     public function delete(string $endpoint): array
     {
-        $response = Http::withBasicAuth($this->secretKey, '')
+        $response = Http::withoutVerifying()->withBasicAuth($this->secretKey, '')
             ->delete("{$this->baseUrl}{$endpoint}");
 
         if (!$response->successful()) {
@@ -97,8 +97,16 @@ class PagarmeClient
             return false;
         }
 
+        // Pagar.me sends signature as "sha256=<hex_hash>" — strip the prefix
+        $cleanSignature = $signature;
+        if (str_starts_with($signature, 'sha256=')) {
+            $cleanSignature = substr($signature, 7);
+        } elseif (str_starts_with($signature, 'sha1=')) {
+            $cleanSignature = substr($signature, 5);
+        }
+
         $expected = hash_hmac('sha256', $payload, $secret);
 
-        return hash_equals($expected, $signature);
+        return hash_equals($expected, $cleanSignature);
     }
 }

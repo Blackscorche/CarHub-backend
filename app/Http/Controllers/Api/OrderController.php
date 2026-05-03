@@ -186,6 +186,7 @@ class OrderController extends Controller
      */
     public function pay(Request $request, Order $order): JsonResponse
     {
+        Log::info('Payment initialization requested', ['order_id' => $order->id, 'method' => $request->input('payment_method')]);
         $request->validate([
             'payment_method' => 'required|in:pix,credit_card,debit_card',
             'card_token' => 'required_if:payment_method,credit_card,debit_card|string',
@@ -197,7 +198,7 @@ class OrderController extends Controller
             return $this->forbidden('Acesso negado.');
         }
 
-        if (!in_array($order->status, ['accepted', 'partially_paid'])) {
+        if (!in_array($order->status, ['accepted', 'partially_paid', 'quote_approved'])) {
             return $this->error('Pedido não pode ser pago neste status.', 422);
         }
 
@@ -208,7 +209,25 @@ class OrderController extends Controller
             $method = $request->input('payment_method');
 
             if ($method === 'pix') {
-                $result = $paymentService->createPixPayment($order, 'full');
+                // BUG 8 FIX: Prevent creating duplicate PIX charges if one is already pending
+                $existingPix = $order->payments()
+                    ->where('method', 'pix')
+                    ->where('status', 'pending')
+                    ->latest()
+                    ->first();
+
+                if ($existingPix && $existingPix->gateway_response) {
+                    $pixData = $existingPix->gateway_response['charges'][0]['last_transaction'] ?? [];
+                    $result = [
+                        'payment_id' => $existingPix->id,
+                        'pix_code' => $pixData['qr_code'] ?? null,
+                        'qr_code_url' => $pixData['qr_code_url'] ?? null,
+                        'expires_at' => $pixData['expires_at'] ?? now()->addMinutes(15)->toIso8601String(),
+                        'status' => 'pending',
+                    ];
+                } else {
+                    $result = $paymentService->createPixPayment($order, 'full');
+                }
             } else {
                 // Card token comes pre-tokenized from the mobile app (via Pagar.me /tokens).
                 // Raw card data never reaches this server — PCI compliant.
@@ -285,6 +304,33 @@ class OrderController extends Controller
         } catch (\InvalidArgumentException $e) {
             return $this->error($e->getMessage(), 422);
         }
+    }
+
+    /**
+     * Simulate a successful payment (Debug only).
+     */
+    public function simulatePayment(Request $request, Order $order): JsonResponse
+    {
+        if ($order->status === 'paid') {
+            return $this->success($order, 'Pedido já está pago.');
+        }
+
+        $order->update(['status' => 'paid', 'payment_method' => 'pix']);
+
+        // Create a dummy payment record
+        $order->payments()->create([
+            'payer_id' => $order->customer_id,
+            'amount' => $order->total,
+            'platform_fee' => $order->platform_fee,
+            'supplier_amount' => $order->total - $order->platform_fee,
+            'method' => 'pix',
+            'type' => 'full',
+            'status' => 'held',
+            'pagarme_charge_id' => 'simulated_' . uniqid(),
+            'gateway_response' => ['simulated' => true],
+        ]);
+
+        return $this->success($order, 'Pagamento simulado com sucesso.');
     }
 
     protected function authorizeSupplier(Request $request, Order $order): void

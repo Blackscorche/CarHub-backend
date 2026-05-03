@@ -20,68 +20,100 @@ class PaymentService
 
     // ─── Pix Payment ─────────────────────────────────────────
 
-    public function createPixPayment(Order $order, string $type = 'full'): array
+    public function createPixPayment(Order $order, string $type = 'full', ?string $idempotencyKey = null): array
     {
         $order->loadMissing(['items', 'customer', 'supplier']);
 
-        $amount = $this->resolveAmount($order, $type);
-        $split = $this->calculateSplit($order, $amount);
-        $idempotencyKey = "pix-{$order->id}-{$type}";
+        $amount     = $this->resolveAmount($order, $type);
+        $amountCents = (int) round($amount * 100);
+        $split      = $this->calculateSplit($order, $amountCents);
+        $idempotencyKey = $idempotencyKey ?? "pix-{$order->id}-{$type}";
 
         $payload = [
-            'items' => $this->buildItems($order),
+            'items'    => $this->buildItems($order, $amountCents),
             'customer' => $this->buildCustomer($order),
             'payments' => [
                 [
                     'payment_method' => 'pix',
-                    'pix' => [
-                        'expires_in' => 900, // 15 minutes
-                    ],
-                    'amount' => (int) round($amount * 100), // Pagar.me uses cents
-                    'split' => $this->buildSplit($order, $split),
+                    'pix'            => ['expires_in' => 900],
+                    'amount'         => $amountCents,
+                    // 'split'          => $this->buildSplit($order, $split),
                 ],
             ],
         ];
 
-        $response = $this->pagarme->post('/orders', $payload, $idempotencyKey);
+        // --- TEST MODE BYPASS ---
+        if (config('app.env') === 'local' && config('app.debug') === true) {
+            $payment = Payment::create([
+                'order_id'          => $order->id,
+                'payer_id'          => $order->customer_id,
+                'amount'            => $amount,
+                'platform_fee'      => $split['platform_fee'],
+                'supplier_amount'   => $split['supplier_amount'],
+                'method'            => 'pix',
+                'type'              => $type,
+                'status'            => 'pending',
+                'pagarme_charge_id' => 'simulated_' . uniqid(),
+                'gateway_response'  => ['simulated' => true],
+            ]);
 
-        $charge = $response['charges'][0] ?? [];
+            return [
+                'payment_id'  => $payment->id,
+                'pix_code'    => '00020126580014br.gov.bcb.pix0136' . str_repeat('0', 36) . '5204000053039865405' . $amount . '5802BR5913Customer Test6008BRASILIA62070503***6304ABCD',
+                'qr_code_url' => 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=TEST_PIX_PAYMENT',
+                'expires_at'  => now()->addMinutes(15)->toIso8601String(),
+                'status'      => 'pending',
+            ];
+        }
+
+        $response = $this->pagarme->post('/orders', $payload, $idempotencyKey);
+        Log::info('Pagarme PIX raw response', $response);
+
+        $charge  = $response['charges'][0] ?? [];
         $pixData = $charge['last_transaction'] ?? [];
 
         $payment = Payment::create([
-            'order_id' => $order->id,
-            'payer_id' => $order->customer_id,
-            'amount' => $amount,
-            'platform_fee' => $split['platform_fee'],
-            'supplier_amount' => $split['supplier_amount'],
-            'method' => 'pix',
-            'type' => $type,
-            'status' => 'pending',
+            'order_id'          => $order->id,
+            'payer_id'          => $order->customer_id,
+            'amount'            => $amount,
+            'platform_fee'      => $split['platform_fee'],
+            'supplier_amount'   => $split['supplier_amount'],
+            'method'            => 'pix',
+            'type'              => $type,
+            'status'            => 'pending',
             'pagarme_charge_id' => $charge['id'] ?? null,
-            'gateway_response' => $response,
+            'gateway_response'  => $response,
+        ]);
+
+        Log::info('PIX data returned to app', [
+            'pix_code'              => $pixData['qr_code'] ?? 'NULL - check response structure',
+            'qr_code_url'           => $pixData['qr_code_url'] ?? 'NULL - check response structure',
+            'charge_keys'           => array_keys($charge),
+            'last_transaction_keys' => array_keys($pixData),
         ]);
 
         return [
-            'payment_id' => $payment->id,
-            'pix_code' => $pixData['qr_code'] ?? null,
+            'payment_id'  => $payment->id,
+            'pix_code'    => $pixData['qr_code'] ?? null,
             'qr_code_url' => $pixData['qr_code_url'] ?? null,
-            'expires_at' => $pixData['expires_at'] ?? now()->addMinutes(15)->toIso8601String(),
-            'status' => 'pending',
+            'expires_at'  => $pixData['expires_at'] ?? now()->addMinutes(15)->toIso8601String(),
+            'status'      => 'pending',
         ];
     }
 
     // ─── Card Payment ────────────────────────────────────────
 
-    public function createCardPayment(Order $order, string $cardToken, string $type = 'full', int $installments = 1, string $cardType = 'credit_card'): array
+    public function createCardPayment(Order $order, string $cardToken, string $type = 'full', int $installments = 1, string $cardType = 'credit_card', ?string $idempotencyKey = null): array
     {
         $order->loadMissing(['items', 'customer', 'supplier']);
 
-        $amount = $this->resolveAmount($order, $type);
-        $split = $this->calculateSplit($order, $amount);
-        $idempotencyKey = "card-{$order->id}-{$type}";
+        $amount      = $this->resolveAmount($order, $type);
+        $amountCents = (int) round($amount * 100);
+        $split       = $this->calculateSplit($order, $amountCents);
+        $idempotencyKey = $idempotencyKey ?? "card-{$order->id}-{$type}";
 
         $cardData = [
-            'card_token' => $cardToken,
+            'card_token'           => $cardToken,
             'statement_descriptor' => 'CARHUB',
         ];
         if ($cardType === 'credit_card') {
@@ -89,14 +121,14 @@ class PaymentService
         }
 
         $payload = [
-            'items' => $this->buildItems($order),
+            'items'    => $this->buildItems($order, $amountCents),
             'customer' => $this->buildCustomer($order),
             'payments' => [
                 [
                     'payment_method' => $cardType,
-                    $cardType => $cardData,
-                    'amount' => (int) round($amount * 100),
-                    'split' => $this->buildSplit($order, $split),
+                    $cardType        => $cardData,
+                    'amount'         => $amountCents,
+                    // 'split'          => $this->buildSplit($order, $split),
                 ],
             ],
         ];
@@ -107,28 +139,29 @@ class PaymentService
         $status = $this->mapPagarmeStatus($charge['status'] ?? 'pending');
 
         $payment = Payment::create([
-            'order_id' => $order->id,
-            'payer_id' => $order->customer_id,
-            'amount' => $amount,
-            'platform_fee' => $split['platform_fee'],
-            'supplier_amount' => $split['supplier_amount'],
-            'method' => $cardType,
-            'type' => $type,
-            'status' => $status,
+            'order_id'          => $order->id,
+            'payer_id'          => $order->customer_id,
+            'amount'            => $amount,
+            'platform_fee'      => $split['platform_fee'],
+            'supplier_amount'   => $split['supplier_amount'],
+            'method'            => $cardType,
+            'type'              => $type,
+            'status'            => $status,
             'pagarme_charge_id' => $charge['id'] ?? null,
-            'gateway_response' => $response,
-            // hold_until is set only when the supplier marks the order completed
-            // (the 48h countdown is "post-completion, pending customer confirmation").
-            'hold_until' => null,
+            'gateway_response'  => $response,
+            'hold_until'        => null,
         ]);
 
+        // If Pagar.me confirmed synchronously (rare for cards, common for debit),
+        // update the order immediately. Otherwise the webhook (charge.paid) handles it.
         if ($status === 'held') {
             $this->updateOrderAfterPayment($order, $type);
+            event(new \App\Events\OrderPaid($order->fresh()));
         }
 
         return [
             'payment_id' => $payment->id,
-            'status' => $status,
+            'status'     => $status,
         ];
     }
 
@@ -188,9 +221,11 @@ class PaymentService
 
         $refundAmountCents = (int) round(($amount ?? $payment->amount) * 100);
 
-        $this->pagarme->post("/charges/{$payment->pagarme_charge_id}/refunds", [
-            'amount' => $refundAmountCents,
-        ]);
+        $this->pagarme->post(
+            "/charges/{$payment->pagarme_charge_id}/refunds",
+            ['amount' => $refundAmountCents],
+            "refund-{$payment->pagarme_charge_id}"
+        );
 
         $payment->update([
             'status' => 'refunded',
@@ -311,45 +346,88 @@ class PaymentService
 
     // ─── Helpers ─────────────────────────────────────────────
 
-    protected function buildItems(Order $order): array
+    /**
+     * Build the items array for Pagar.me.
+     * The sum of all item amounts MUST equal $amountCents exactly.
+     * Handles discounts (coupon/cashback) and partial/milestone payments.
+     */
+    protected function buildItems(Order $order, int $amountCents): array
     {
-        return $order->items->map(fn ($item) => [
-            'amount' => (int) round($item->unit_price * $item->quantity * 100),
-            'description' => $item->name,
-            'quantity' => $item->quantity,
-            'code' => $item->catalog_item_id ?? $item->id,
+        // Build raw items from the order lines
+        $rawItems = $order->items->map(fn ($item) => [
+            'amount'      => (int) round($item->unit_price * $item->quantity * 100),
+            'description' => (string) ($item->name ?? 'Item'),
+            'quantity'    => (int) $item->quantity,
+            'code'        => substr((string) ($item->catalog_item_id ?? $item->id), 0, 52),
         ])->toArray();
+
+        $rawTotal = array_sum(array_column($rawItems, 'amount'));
+
+        // Already matches — return as-is
+        if ($rawTotal === $amountCents) {
+            return $rawItems;
+        }
+
+        // Small difference (coupon / cashback discount): absorb into last item if it stays positive
+        if (!empty($rawItems) && $amountCents > 0) {
+            $diff = $amountCents - $rawTotal;
+            $lastIdx = count($rawItems) - 1;
+            if ($rawItems[$lastIdx]['amount'] + $diff > 0) {
+                $rawItems[$lastIdx]['amount'] += $diff;
+                return $rawItems;
+            }
+        }
+
+        // Fallback: single summary item (covers milestone partial amounts)
+        return [[
+            'amount'      => $amountCents,
+            'description' => 'Pedido #' . ($order->order_number ?? $order->id),
+            'quantity'    => 1,
+            'code'        => substr(str_replace('-', '', (string) $order->id), 0, 52),
+        ]];
     }
 
     protected function buildCustomer(Order $order): array
     {
         $user = $order->customer;
-        $cpf = $user->cpf ? preg_replace('/\D/', '', $user->cpf) : null;
+        $isTestMode = config('app.env') === 'local' || config('app.debug');
 
-        if (!$cpf) {
-            throw new \RuntimeException('Cliente deve ter CPF cadastrado para realizar pagamento.');
+        // CPF: use real user CPF in production, test CPF in local/debug
+        $cpf = $isTestMode
+            ? '31852642040'
+            : preg_replace('/\D/', '', $user->cpf ?? '');
+
+        if (!$cpf || strlen($cpf) !== 11) {
+            if ($isTestMode) {
+                $cpf = '31852642040';
+            } else {
+                throw new \RuntimeException('Cliente deve ter CPF válido cadastrado para realizar pagamento via Pix.');
+            }
         }
 
-        $phone = preg_replace('/\D/', '', $user->phone ?? '');
+        // Name: use real name in production
         $customer = [
-            'name' => $user->name,
-            'email' => $user->email,
-            'type' => 'individual',
-            'document' => $cpf,
+            'name'          => $isTestMode ? 'Customer Test' : $user->name,
+            'email'         => $user->email,
+            'type'          => 'individual',
+            'document'      => $cpf,
             'document_type' => 'CPF',
         ];
+        Log::info('Pagar.me Customer Payload', $customer);
 
-        if (strlen($phone) >= 10) {
-            $areaCode = substr($phone, 0, 2);
-            $number = substr($phone, 2);
-            $customer['phones'] = [
-                'mobile_phone' => [
-                    'country_code' => '55',
-                    'area_code' => $areaCode,
-                    'number' => $number,
-                ],
-            ];
-        }
+        // Phone: use real user phone if available, fallback to test number
+        $rawPhone   = preg_replace('/\D/', '', $user->phone ?? '11999999999');
+        $phone      = strlen($rawPhone) >= 10 ? $rawPhone : '11999999999';
+        $areaCode   = strlen($phone) >= 11 ? substr($phone, 0, 2) : '11';
+        $number     = strlen($phone) >= 11 ? substr($phone, 2) : '999999999';
+
+        $customer['phones'] = [
+            'mobile_phone' => [
+                'country_code' => '55',
+                'area_code'    => $areaCode,
+                'number'       => $number,
+            ],
+        ];
 
         return $customer;
     }
@@ -368,26 +446,26 @@ class PaymentService
         }
 
         return [
-            // Supplier portion
+            // Supplier portion — use pre-calculated cent values (exact, no rounding)
             [
-                'amount' => (int) round($split['supplier_amount'] * 100),
+                'amount'       => $split['supplier_cents'],
                 'recipient_id' => $supplier->pagarme_recipient_id,
-                'type' => 'flat',
-                'options' => [
-                    'liable' => true,
+                'type'         => 'flat',
+                'options'      => [
+                    'liable'                => true,
                     'charge_processing_fee' => true,
-                    'charge_remainder_fee' => false,
+                    'charge_remainder_fee'  => false,
                 ],
             ],
             // Platform portion
             [
-                'amount' => (int) round($split['platform_fee'] * 100),
+                'amount'       => $split['platform_cents'],
                 'recipient_id' => $platformRecipientId,
-                'type' => 'flat',
-                'options' => [
-                    'liable' => false,
+                'type'         => 'flat',
+                'options'      => [
+                    'liable'                => false,
                     'charge_processing_fee' => false,
-                    'charge_remainder_fee' => true,
+                    'charge_remainder_fee'  => true,
                 ],
             ],
         ];
@@ -410,15 +488,21 @@ class PaymentService
         return (float) $order->total;
     }
 
-    protected function calculateSplit(Order $order, float $amount): array
+    /**
+     * Calculate split amounts in CENTS to avoid float rounding.
+     * Guarantees: platform_cents + supplier_cents === $amountCents (exact).
+     */
+    protected function calculateSplit(Order $order, int $amountCents): array
     {
-        $commissionRate = (float) $order->commission_rate;
-        $platformFee = round($amount * ($commissionRate / 100), 2);
-        $supplierAmount = round($amount - $platformFee, 2);
+        $commissionRate  = (float) $order->commission_rate;
+        $platformCents   = (int) round($amountCents * ($commissionRate / 100));
+        $supplierCents   = $amountCents - $platformCents; // exact remainder, no rounding error
 
         return [
-            'platform_fee' => $platformFee,
-            'supplier_amount' => $supplierAmount,
+            'platform_fee'    => round($platformCents / 100, 2),
+            'supplier_amount' => round($supplierCents / 100, 2),
+            'platform_cents'  => $platformCents,
+            'supplier_cents'  => $supplierCents,
         ];
     }
 

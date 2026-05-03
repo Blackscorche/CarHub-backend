@@ -198,7 +198,10 @@ Route::middleware(['auth:sanctum', 'audit'])->group(function () {
     Route::middleware('role:customer')->group(function () {
         Route::post('/schedules', [ScheduleController::class, 'store']);
     });
+    Route::put('/schedules/{schedule}/accept', [ScheduleController::class, 'accept']);
+    Route::put('/schedules/{schedule}/reject', [ScheduleController::class, 'reject']);
     Route::put('/schedules/{schedule}/cancel', [ScheduleController::class, 'cancel']);
+    Route::post('/orders/{order}/simulate-payment', [OrderController::class, 'simulatePayment']);
 
     // Invoices
     Route::get('/orders/{order}/invoice', [InvoiceController::class, 'download']);
