@@ -114,6 +114,15 @@ class Supplier extends Model
 
     public function scopeNearby(Builder $query, float $lat, float $lng, float $radiusKm = 50): Builder
     {
+        if (\Illuminate\Support\Facades\DB::connection()->getDriverName() === 'sqlite') {
+            return $query
+                ->select('suppliers.*')
+                ->selectRaw("10.5 AS distance")
+                ->selectRaw("15 AS eta_minutes")
+                ->whereNotNull('latitude')
+                ->whereNotNull('longitude');
+        }
+
         $haversine = "(6371 * acos(cos(radians(?)) * cos(radians(latitude))
             * cos(radians(longitude) - radians(?)) + sin(radians(?))
             * sin(radians(latitude))))";

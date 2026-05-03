@@ -45,8 +45,8 @@ class HandleOrderCancelled implements ShouldQueue
         // Notify both customer and supplier's user
         try {
             $order->loadMissing(['customer', 'supplier.user']);
-            $order->customer->notify(new OrderCancelledNotification($order));
-            $order->supplier->user->notify(new OrderCancelledNotification($order));
+            $order->customer?->notify(new OrderCancelledNotification($order));
+            $order->supplier?->user?->notify(new OrderCancelledNotification($order));
         } catch (\Throwable $e) {
             Log::warning('Failed to send OrderCancelled notification', [
                 'order_id' => $order->id,

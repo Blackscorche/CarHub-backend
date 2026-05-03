@@ -30,10 +30,11 @@ class ExpirePixPayments implements ShouldQueue
                 ->whereIn('status', ['held', 'released', 'confirmed'])
                 ->exists();
 
-            if (! $hasOtherPayment && $order->status === 'created') {
-                Log::info('Pix payment expired, order remains created', [
+            if (! $hasOtherPayment && in_array($order->status, ['accepted', 'quote_approved', 'partially_paid'])) {
+                Log::info('Pix payment expired, order remains ready for payment', [
                     'payment_id' => $payment->id,
                     'order_id' => $order->id,
+                    'status' => $order->status,
                 ]);
             }
         }

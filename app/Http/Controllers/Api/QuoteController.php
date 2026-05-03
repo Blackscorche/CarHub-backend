@@ -100,7 +100,7 @@ class QuoteController extends Controller
         }
 
         $initialPrice = $request->input('initial_price');
-        $commissionRate = (float) $quote->order->commission_rate;
+        $commissionRate = (float) ($quote->order->commission_rate ?? config('services.platform.commission_rate', 10));
         $platformFee = round($initialPrice * ($commissionRate / 100), 2);
 
         $quote->update([

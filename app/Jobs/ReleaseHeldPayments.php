@@ -34,8 +34,9 @@ class ReleaseHeldPayments implements ShouldQueue
                 $paymentService->releasePayment($payment);
 
                 // Mark the order as delivered so the customer sees an "auto-confirmed" outcome.
-                if ($payment->order && $payment->order->status === 'completed') {
-                    $payment->order->update(['status' => 'delivered']);
+                $order = $payment->order?->fresh();
+                if ($order && $order->status === 'completed') {
+                    $order->update(['status' => 'delivered']);
                 }
 
                 // Notify supplier that the repasse was auto-released.

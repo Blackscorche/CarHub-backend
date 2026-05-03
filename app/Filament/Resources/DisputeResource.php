@@ -181,11 +181,11 @@ class DisputeResource extends Resource
                         // Notify both parties of the resolution.
                         $record->loadMissing(['order.customer', 'order.supplier.user']);
                         $fresh = $record->fresh();
-                        if ($record->order?->customer) {
-                            $record->order->customer->notify(new DisputeResolvedNotification($fresh));
+                        if ($fresh->order?->customer) {
+                            $fresh->order->customer->notify(new DisputeResolvedNotification($fresh));
                         }
-                        if ($record->order?->supplier?->user) {
-                            $record->order->supplier->user->notify(new DisputeResolvedNotification($fresh));
+                        if ($fresh->order?->supplier?->user) {
+                            $fresh->order->supplier->user->notify(new DisputeResolvedNotification($fresh));
                         }
                     }),
             ]);

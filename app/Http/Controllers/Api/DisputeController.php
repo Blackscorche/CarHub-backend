@@ -45,33 +45,43 @@ class DisputeController extends Controller
             return $this->error('Não é possível abrir disputa no status atual.', 422);
         }
 
-        $evidenceUrls = [];
-        if ($request->hasFile('evidence')) {
-            foreach ($request->file('evidence') as $file) {
-                $path = $file->store('disputes/' . $order->id, 'public');
-                $evidenceUrls[] = Storage::url($path);
+        $dispute = DB::transaction(function () use ($request, $user, $order) {
+            $evidenceUrls = [];
+            $paths = [];
+
+            try {
+                if ($request->hasFile('evidence')) {
+                    foreach ($request->file('evidence') as $file) {
+                        $path = $file->store('disputes/' . $order->id, 'public');
+                        $paths[] = $path;
+                        $evidenceUrls[] = Storage::url($path);
+                    }
+                }
+
+                $dispute = Dispute::create([
+                    'order_id' => $order->id,
+                    'opened_by' => $user->id,
+                    'category' => $request->input('category'),
+                    'description' => $request->input('description'),
+                    'evidence_urls' => $evidenceUrls ?: null,
+                    'status' => 'open',
+                ]);
+
+                $order->update(['status' => 'disputed']);
+
+                // Freeze any held payments so the 48h auto-release job skips them
+                // until the dispute is resolved (release or refund via admin).
+                $order->payments()
+                    ->where('status', 'held')
+                    ->update(['hold_until' => null]);
+
+                return $dispute;
+            } catch (\Throwable $e) {
+                foreach ($paths as $path) {
+                    Storage::disk('public')->delete($path);
+                }
+                throw $e;
             }
-        }
-
-        $dispute = DB::transaction(function () use ($request, $user, $order, $evidenceUrls) {
-            $dispute = Dispute::create([
-                'order_id' => $order->id,
-                'opened_by' => $user->id,
-                'category' => $request->input('category'),
-                'description' => $request->input('description'),
-                'evidence_urls' => $evidenceUrls ?: null,
-                'status' => 'open',
-            ]);
-
-            $order->update(['status' => 'disputed']);
-
-            // Freeze any held payments so the 48h auto-release job skips them
-            // until the dispute is resolved (release or refund via admin).
-            $order->payments()
-                ->where('status', 'held')
-                ->update(['hold_until' => null]);
-
-            return $dispute;
         });
 
         // Notify both parties

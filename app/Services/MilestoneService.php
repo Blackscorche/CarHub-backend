@@ -39,19 +39,21 @@ class MilestoneService
         $nextSequence = ($order->milestones->max('sequence') ?? 0) + 1;
 
         // Create payment via PaymentService
-        // Clone order with modified total to avoid mutating original
-        $tempOrder = $order->replicate();
-        $tempOrder->id = $order->id;
-        $tempOrder->total = $amount;
-        $tempOrder->exists = true;
+        // Use a clone of the order and override total temporarily for amount calculation.
+        // PaymentService::buildItems() will handle the partial amount via its fallback.
+        $fakeOrder = clone $order;
+        $fakeOrder->total = $amount;
+
+        // Unique idempotency key per milestone sequence to avoid cached responses
+        $idempotencyKey = "milestone-{$paymentMethod}-{$order->id}-seq{$nextSequence}";
 
         if ($paymentMethod === 'pix') {
-            $paymentResult = $this->paymentService->createPixPayment($tempOrder, 'full');
+            $paymentResult = $this->paymentService->createPixPayment($fakeOrder, 'full', $idempotencyKey);
         } else {
             if (!$cardToken) {
                 throw new \RuntimeException('Token do cartão é obrigatório.');
             }
-            $paymentResult = $this->paymentService->createCardPayment($tempOrder, $cardToken, 'full', 1, $paymentMethod);
+            $paymentResult = $this->paymentService->createCardPayment($fakeOrder, $cardToken, 'full', 1, $paymentMethod, $idempotencyKey);
         }
 
         // Get the actual Pagar.me charge ID from the Payment record
@@ -207,10 +209,21 @@ class MilestoneService
         }
 
         try {
-            $this->paymentService->manualWithdraw(
-                $supplier->pagarme_recipient_id,
-                (float) $milestone->amount
-            );
+            // Find the Payment record linked to this milestone and release it properly
+            // so the Payment status is updated (avoids double-release by ReleaseHeldPayments job)
+            $payment = \App\Models\Payment::where('pagarme_charge_id', $milestone->pagarme_charge_id)
+                ->whereIn('status', ['held', 'confirmed'])
+                ->first();
+
+            if ($payment) {
+                $this->paymentService->releasePayment($payment);
+            } else {
+                // Fallback: direct withdrawal if no matching Payment record found
+                $this->paymentService->manualWithdraw(
+                    $supplier->pagarme_recipient_id,
+                    (float) $milestone->amount
+                );
+            }
 
             $milestone->update([
                 'released_at' => now(),
@@ -257,10 +270,8 @@ class MilestoneService
                 'status' => 'refunded',
             ]);
             // Refund via Pagar.me — find the payment linked to this milestone
-            $payment = \App\Models\Payment::where('order_id', $milestone->order_id)
-                ->where('amount', $milestone->amount)
+            $payment = \App\Models\Payment::where('pagarme_charge_id', $milestone->pagarme_charge_id)
                 ->whereIn('status', ['held', 'confirmed'])
-                ->latest()
                 ->first();
 
             if ($payment) {
