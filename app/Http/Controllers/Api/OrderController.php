@@ -216,16 +216,23 @@ class OrderController extends Controller
                     ->latest()
                     ->first();
 
-                if ($existingPix && $existingPix->gateway_response) {
-                    $pixData = $existingPix->gateway_response['charges'][0]['last_transaction'] ?? [];
+                $pixData = $existingPix
+                    ? ($existingPix->gateway_response['charges'][0]['last_transaction'] ?? [])
+                    : [];
+                $hasValidQr = !empty($pixData['qr_code']);
+
+                if ($existingPix && $hasValidQr) {
                     $result = [
                         'payment_id' => $existingPix->id,
-                        'pix_code' => $pixData['qr_code'] ?? null,
+                        'pix_code' => $pixData['qr_code'],
                         'qr_code_url' => $pixData['qr_code_url'] ?? null,
                         'expires_at' => $pixData['expires_at'] ?? now()->addMinutes(15)->toIso8601String(),
                         'status' => 'pending',
                     ];
                 } else {
+                    if ($existingPix) {
+                        $existingPix->update(['status' => 'failed']);
+                    }
                     $result = $paymentService->createPixPayment($order, 'full');
                 }
             } else {
@@ -304,33 +311,6 @@ class OrderController extends Controller
         } catch (\InvalidArgumentException $e) {
             return $this->error($e->getMessage(), 422);
         }
-    }
-
-    /**
-     * Simulate a successful payment (Debug only).
-     */
-    public function simulatePayment(Request $request, Order $order): JsonResponse
-    {
-        if ($order->status === 'paid') {
-            return $this->success($order, 'Pedido já está pago.');
-        }
-
-        $order->update(['status' => 'paid', 'payment_method' => 'pix']);
-
-        // Create a dummy payment record
-        $order->payments()->create([
-            'payer_id' => $order->customer_id,
-            'amount' => $order->total,
-            'platform_fee' => $order->platform_fee,
-            'supplier_amount' => $order->total - $order->platform_fee,
-            'method' => 'pix',
-            'type' => 'full',
-            'status' => 'held',
-            'pagarme_charge_id' => 'simulated_' . uniqid(),
-            'gateway_response' => ['simulated' => true],
-        ]);
-
-        return $this->success($order, 'Pagamento simulado com sucesso.');
     }
 
     protected function authorizeSupplier(Request $request, Order $order): void

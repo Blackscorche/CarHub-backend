@@ -42,35 +42,20 @@ class PaymentService
             ],
         ];
 
-        // --- TEST MODE BYPASS ---
-        if (config('app.env') === 'local' && config('app.debug') === true) {
-            $payment = Payment::create([
-                'order_id'          => $order->id,
-                'payer_id'          => $order->customer_id,
-                'amount'            => $amount,
-                'platform_fee'      => $split['platform_fee'],
-                'supplier_amount'   => $split['supplier_amount'],
-                'method'            => 'pix',
-                'type'              => $type,
-                'status'            => 'pending',
-                'pagarme_charge_id' => 'simulated_' . uniqid(),
-                'gateway_response'  => ['simulated' => true],
-            ]);
-
-            return [
-                'payment_id'  => $payment->id,
-                'pix_code'    => '00020126580014br.gov.bcb.pix0136' . str_repeat('0', 36) . '5204000053039865405' . $amount . '5802BR5913Customer Test6008BRASILIA62070503***6304ABCD',
-                'qr_code_url' => 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=TEST_PIX_PAYMENT',
-                'expires_at'  => now()->addMinutes(15)->toIso8601String(),
-                'status'      => 'pending',
-            ];
-        }
-
         $response = $this->pagarme->post('/orders', $payload, $idempotencyKey);
         Log::info('Pagarme PIX raw response', $response);
 
         $charge  = $response['charges'][0] ?? [];
         $pixData = $charge['last_transaction'] ?? [];
+
+        // Detect synchronous failure and throw with Pagarme's error message
+        if (($response['status'] ?? '') === 'failed' || ($charge['status'] ?? '') === 'failed') {
+            $pagarmeError = $pixData['gateway_response']['errors'][0]['message']
+                ?? $charge['gateway_response']['errors'][0]['message']
+                ?? 'PIX criação falhou no gateway.';
+            Log::error('Pagar.me PIX charge failed', ['error' => $pagarmeError, 'order_id' => $order->id]);
+            throw new \RuntimeException('Erro no gateway de pagamento: ' . $pagarmeError);
+        }
 
         $payment = Payment::create([
             'order_id'          => $order->id,
@@ -390,16 +375,15 @@ class PaymentService
     protected function buildCustomer(Order $order): array
     {
         $user = $order->customer;
-        $isTestMode = config('app.env') === 'local' || config('app.debug');
+        $isTestMode = str_starts_with(config('services.pagarme.secret_key', ''), 'sk_test_');
 
-        // CPF: use real user CPF in production, test CPF in local/debug
         $cpf = $isTestMode
-            ? '31852642040'
+            ? '11144477735'
             : preg_replace('/\D/', '', $user->cpf ?? '');
 
         if (!$cpf || strlen($cpf) !== 11) {
             if ($isTestMode) {
-                $cpf = '31852642040';
+                $cpf = '11144477735';
             } else {
                 throw new \RuntimeException('Cliente deve ter CPF válido cadastrado para realizar pagamento via Pix.');
             }
@@ -407,7 +391,7 @@ class PaymentService
 
         // Name: use real name in production
         $customer = [
-            'name'          => $isTestMode ? 'Customer Test' : $user->name,
+            'name'          => $isTestMode ? 'Cliente Teste' : $user->name,
             'email'         => $user->email,
             'type'          => 'individual',
             'document'      => $cpf,

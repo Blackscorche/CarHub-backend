@@ -74,14 +74,24 @@ class PaymentController extends Controller
 
     /**
      * Pagar.me webhook endpoint.
+     *
+     * Pagar.me v5 does not send any signature header — protection is via a
+     * secret token appended to the webhook URL in the Pagar.me dashboard:
+     *   POST /api/payments/webhook?token=YOUR_WEBHOOK_TOKEN
      */
     public function webhook(Request $request): JsonResponse
     {
-        Log::info('Pagar.me webhook received!', [
+        $expectedToken = config('services.pagarme.webhook_secret');
+
+        if ($expectedToken && $request->query('token') !== $expectedToken) {
+            Log::warning('Webhook rejected: invalid token', ['ip' => $request->ip()]);
+            return response()->json(['status' => 'unauthorized'], 401);
+        }
+
+        Log::info('Pagar.me webhook received', [
             'type' => $request->input('type'),
             'id'   => $request->input('id'),
         ]);
-        Log::info('Pagarme webhook full payload', $request->all());
 
         try {
             $this->paymentService->handleWebhook($request->all());

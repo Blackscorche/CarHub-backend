@@ -89,24 +89,4 @@ class PagarmeClient
         return $response->json();
     }
 
-    public function verifyWebhookSignature(string $payload, string $signature): bool
-    {
-        $secret = config('services.pagarme.webhook_secret', '');
-        if (!$secret) {
-            \Illuminate\Support\Facades\Log::critical('Pagar.me webhook secret not configured — rejecting webhook');
-            return false;
-        }
-
-        // Pagar.me sends signature as "sha256=<hex_hash>" — strip the prefix
-        $cleanSignature = $signature;
-        if (str_starts_with($signature, 'sha256=')) {
-            $cleanSignature = substr($signature, 7);
-        } elseif (str_starts_with($signature, 'sha1=')) {
-            $cleanSignature = substr($signature, 5);
-        }
-
-        $expected = hash_hmac('sha256', $payload, $secret);
-
-        return hash_equals($expected, $cleanSignature);
-    }
 }
