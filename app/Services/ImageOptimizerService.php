@@ -10,11 +10,15 @@ use Intervention\Image\Drivers\Gd\Driver;
 
 class ImageOptimizerService
 {
-    protected ImageManager $manager;
+    protected ?ImageManager $manager;
 
     public function __construct()
     {
-        $this->manager = new ImageManager(new Driver());
+        try {
+            $this->manager = new ImageManager(new Driver());
+        } catch (\Throwable $e) {
+            $this->manager = null;
+        }
     }
 
     /**
@@ -30,6 +34,7 @@ class ImageOptimizerService
         int $quality = 80,
     ): string {
         try {
+            if (!$this->manager) throw new \RuntimeException('GD not available');
             $image = $this->manager->read($file->getRealPath());
 
             // Resize only if larger than max dimensions (keep aspect ratio)

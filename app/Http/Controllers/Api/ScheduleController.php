@@ -80,7 +80,7 @@ class ScheduleController extends Controller
             'scheduled_date' => $request->input('scheduled_date'),
             'scheduled_time' => $request->input('scheduled_time'),
             'duration_minutes' => $request->input('duration_minutes', 60),
-            'status' => 'pending',
+            'status' => 'confirmed',
             'reminder_sent' => false,
         ]);
 
@@ -95,7 +95,7 @@ class ScheduleController extends Controller
             );
         }
 
-        return $this->created($schedule, 'Agendamento solicitado. Aguardando confirmação.');
+        return $this->created($schedule, 'Agendamento confirmado com sucesso.');
     }
 
     public function index(Request $request): JsonResponse

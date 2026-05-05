@@ -29,6 +29,30 @@ class PaymentService
         $split      = $this->calculateSplit($order, $amountCents);
         $idempotencyKey = $idempotencyKey ?? "pix-{$order->id}-{$type}";
 
+        // ── Demo / test-mode bypass ───────────────────────────
+        if ($this->isTestMode()) {
+            Log::info('TEST MODE: simulating PIX payment', ['order_id' => $order->id]);
+            $payment = Payment::create([
+                'order_id'          => $order->id,
+                'payer_id'          => $order->customer_id,
+                'amount'            => $amount,
+                'platform_fee'      => $split['platform_fee'],
+                'supplier_amount'   => $split['supplier_amount'],
+                'method'            => 'pix',
+                'type'              => $type,
+                'status'            => 'pending',
+                'pagarme_charge_id' => 'test_pix_' . uniqid(),
+                'gateway_response'  => ['test_mode' => true],
+            ]);
+            return [
+                'payment_id'  => $payment->id,
+                'pix_code'    => '00020126580014br.gov.bcb.pix0136test-demo-pix-code-carhub5204000053039865406' . number_format($amount, 2, '', '') . '5802BR5913CarHub Demo6008Brasilia62070503***6304TEST',
+                'qr_code_url' => null,
+                'expires_at'  => now()->addMinutes(15)->toIso8601String(),
+                'status'      => 'pending',
+            ];
+        }
+
         $payload = [
             'items'    => $this->buildItems($order, $amountCents),
             'customer' => $this->buildCustomer($order),
@@ -88,6 +112,11 @@ class PaymentService
 
     // ─── Card Payment ────────────────────────────────────────
 
+    protected function isTestMode(): bool
+    {
+        return str_starts_with(config('services.pagarme.secret_key', ''), 'sk_test_');
+    }
+
     public function createCardPayment(Order $order, string $cardToken, string $type = 'full', int $installments = 1, string $cardType = 'credit_card', ?string $idempotencyKey = null): array
     {
         $order->loadMissing(['items', 'customer', 'supplier']);
@@ -96,6 +125,29 @@ class PaymentService
         $amountCents = (int) round($amount * 100);
         $split       = $this->calculateSplit($order, $amountCents);
         $idempotencyKey = $idempotencyKey ?? "card-{$order->id}-{$type}";
+
+        // ── Demo / test-mode bypass ───────────────────────────
+        // Pagarme sandbox often has no payment methods configured.
+        // In test mode we simulate a successful charge so the demo works end-to-end.
+        if ($this->isTestMode()) {
+            Log::info('TEST MODE: simulating card payment success', ['order_id' => $order->id]);
+            $payment = Payment::create([
+                'order_id'          => $order->id,
+                'payer_id'          => $order->customer_id,
+                'amount'            => $amount,
+                'platform_fee'      => $split['platform_fee'],
+                'supplier_amount'   => $split['supplier_amount'],
+                'method'            => $cardType,
+                'type'              => $type,
+                'status'            => 'held',
+                'pagarme_charge_id' => 'test_' . uniqid(),
+                'gateway_response'  => ['test_mode' => true],
+                'hold_until'        => null,
+            ]);
+            $this->updateOrderAfterPayment($order, $type);
+            event(new \App\Events\OrderPaid($order->fresh()));
+            return ['payment_id' => $payment->id, 'status' => 'held'];
+        }
 
         $cardData = [
             'card_token'           => $cardToken,
