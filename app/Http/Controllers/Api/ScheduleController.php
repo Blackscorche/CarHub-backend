@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Schedule;
 use App\Models\Supplier;
+use App\Services\FcmService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -86,9 +87,9 @@ class ScheduleController extends Controller
 
         // Notify Supplier
         $supplierUser = $schedule->supplier->user;
-        if ($supplierUser && $supplierUser->fcm_token) {
-            app(\App\Services\NotificationService::class)->sendPush(
-                $supplierUser->fcm_token,
+        if ($supplierUser) {
+            app(FcmService::class)->sendToUser(
+                $supplierUser,
                 'Novo Agendamento solicitado',
                 "{$user->name} solicitou um horário para o dia " . date('d/m', strtotime($schedule->scheduled_date)),
                 ['type' => 'schedule', 'schedule_id' => $schedule->id]
