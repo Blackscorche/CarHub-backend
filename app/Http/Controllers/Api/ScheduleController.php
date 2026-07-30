@@ -86,14 +86,18 @@ class ScheduleController extends Controller
         ]);
 
         // Notify Supplier
-        $supplierUser = $schedule->supplier->user;
-        if ($supplierUser) {
-            app(FcmService::class)->sendToUser(
-                $supplierUser,
-                'Novo Agendamento solicitado',
-                "{$user->name} solicitou um horário para o dia " . date('d/m', strtotime($schedule->scheduled_date)),
-                ['type' => 'schedule', 'schedule_id' => $schedule->id]
-            );
+        try {
+            $supplierUser = $schedule->supplier->user;
+            if ($supplierUser) {
+                app(FcmService::class)->sendToUser(
+                    $supplierUser,
+                    'Novo Agendamento solicitado',
+                    "{$user->name} solicitou um horário para o dia " . date('d/m', strtotime($schedule->scheduled_date)),
+                    ['type' => 'schedule', 'schedule_id' => $schedule->id]
+                );
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('FCM notify failed on schedule store', ['error' => $e->getMessage()]);
         }
 
         return $this->created($schedule, 'Agendamento confirmado com sucesso.');
@@ -150,14 +154,18 @@ class ScheduleController extends Controller
         $schedule->update(['status' => 'confirmed']);
 
         // Notify Customer
-        $customer = $schedule->customer;
-        if ($customer && $customer->fcm_token) {
-            app(\App\Services\NotificationService::class)->sendPush(
-                $customer->fcm_token,
-                'Agendamento Confirmado! ✅',
-                "Seu agendamento com {$schedule->supplier->business_name} foi aceito.",
-                ['type' => 'schedule', 'schedule_id' => $schedule->id]
-            );
+        try {
+            $customer = $schedule->customer;
+            if ($customer) {
+                app(FcmService::class)->sendToUser(
+                    $customer,
+                    'Agendamento Confirmado! ✅',
+                    "Seu agendamento com {$schedule->supplier->business_name} foi aceito.",
+                    ['type' => 'schedule', 'schedule_id' => $schedule->id]
+                );
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('FCM notify failed on schedule accept', ['error' => $e->getMessage()]);
         }
 
         return $this->success($schedule->fresh(), 'Agendamento aceito com sucesso.');
@@ -177,14 +185,18 @@ class ScheduleController extends Controller
         $schedule->update(['status' => 'rejected']);
 
         // Notify Customer
-        $customer = $schedule->customer;
-        if ($customer && $customer->fcm_token) {
-            app(\App\Services\NotificationService::class)->sendPush(
-                $customer->fcm_token,
-                'Agendamento Recusado ❌',
-                "Infelizmente o fornecedor {$schedule->supplier->business_name} não poderá te atender no horário solicitado.",
-                ['type' => 'schedule', 'schedule_id' => $schedule->id]
-            );
+        try {
+            $customer = $schedule->customer;
+            if ($customer) {
+                app(FcmService::class)->sendToUser(
+                    $customer,
+                    'Agendamento Recusado ❌',
+                    "Infelizmente o fornecedor {$schedule->supplier->business_name} não poderá te atender no horário solicitado.",
+                    ['type' => 'schedule', 'schedule_id' => $schedule->id]
+                );
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('FCM notify failed on schedule reject', ['error' => $e->getMessage()]);
         }
 
         return $this->success($schedule->fresh(), 'Agendamento rejeitado.');

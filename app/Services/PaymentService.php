@@ -29,30 +29,6 @@ class PaymentService
         $split      = $this->calculateSplit($order, $amountCents);
         $idempotencyKey = $idempotencyKey ?? "pix-{$order->id}-{$type}";
 
-        // ── Demo / test-mode bypass ───────────────────────────
-        if ($this->isTestMode()) {
-            Log::info('TEST MODE: simulating PIX payment', ['order_id' => $order->id]);
-            $payment = Payment::create([
-                'order_id'          => $order->id,
-                'payer_id'          => $order->customer_id,
-                'amount'            => $amount,
-                'platform_fee'      => $split['platform_fee'],
-                'supplier_amount'   => $split['supplier_amount'],
-                'method'            => 'pix',
-                'type'              => $type,
-                'status'            => 'pending',
-                'pagarme_charge_id' => 'test_pix_' . uniqid(),
-                'gateway_response'  => ['test_mode' => true],
-            ]);
-            return [
-                'payment_id'  => $payment->id,
-                'pix_code'    => '00020126580014br.gov.bcb.pix0136test-demo-pix-code-carhub5204000053039865406' . number_format($amount, 2, '', '') . '5802BR5913CarHub Demo6008Brasilia62070503***6304TEST',
-                'qr_code_url' => null,
-                'expires_at'  => now()->addMinutes(15)->toIso8601String(),
-                'status'      => 'pending',
-            ];
-        }
-
         $payload = [
             'items'    => $this->buildItems($order, $amountCents),
             'customer' => $this->buildCustomer($order),
@@ -67,10 +43,22 @@ class PaymentService
         ];
 
         $response = $this->pagarme->post('/orders', $payload, $idempotencyKey);
-        Log::info('Pagarme PIX raw response', $response);
+        Log::info('Pagarme PIX raw response', ['order_id' => $order->id, 'response' => $response]);
 
-        $charge  = $response['charges'][0] ?? [];
-        $pixData = $charge['last_transaction'] ?? [];
+        $charge = $response['charges'][0] ?? [];
+        
+        // Defensive parsing for PIX data (qr_code, qr_code_url)
+        // V5 can return it in last_transaction or within the first transaction of the charge
+        $pixData = $charge['last_transaction'] ?? $charge['transactions'][0] ?? [];
+
+        if (empty($pixData['qr_code'])) {
+            Log::warning('PIX data missing in Pagarme response', [
+                'order_id' => $order->id,
+                'charge_id' => $charge['id'] ?? 'N/A',
+                'has_last_transaction' => isset($charge['last_transaction']),
+                'has_transactions' => isset($charge['transactions']),
+            ]);
+        }
 
         // Detect synchronous failure and throw with Pagarme's error message
         if (($response['status'] ?? '') === 'failed' || ($charge['status'] ?? '') === 'failed') {
@@ -107,6 +95,7 @@ class PaymentService
             'qr_code_url' => $pixData['qr_code_url'] ?? null,
             'expires_at'  => $pixData['expires_at'] ?? now()->addMinutes(15)->toIso8601String(),
             'status'      => 'pending',
+            'raw_pix'     => $pixData, // For debugging if needed
         ];
     }
 
@@ -437,7 +426,9 @@ class PaymentService
             if ($isTestMode) {
                 $cpf = '11144477735';
             } else {
-                throw new \RuntimeException('Cliente deve ter CPF válido cadastrado para realizar pagamento via Pix.');
+                throw new \RuntimeException(
+                    'Para pagar via Pix, seu CPF precisa estar cadastrado. Acesse Perfil → Editar e adicione seu CPF antes de continuar.'
+                );
             }
         }
 

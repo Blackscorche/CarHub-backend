@@ -26,7 +26,9 @@ class AuthController extends Controller
             'password' => ['required', 'confirmed', PasswordRule::min(8)->letters()->numbers()],
             'phone' => ['required', 'regex:/^(\+55)?\d{10,11}$/'],
             'role' => 'required|in:customer,supplier',
-            'cpf' => ['nullable', 'string', new Cpf],
+            'cpf' => $request->input('role') === 'customer'
+                ? ['required', 'string', new Cpf]
+                : ['nullable', 'string', new Cpf],
             'lgpd_consent' => 'required|accepted',
             'terms_version' => 'nullable|string|max:20',
         ];

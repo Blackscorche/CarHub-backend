@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Rules\Cpf;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,9 +26,14 @@ class ProfileController extends Controller
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'phone' => ['sometimes', 'regex:/^(\+55)?\d{10,11}$/'],
-            'cpf' => 'sometimes|nullable|string',
+            'cpf' => ['sometimes', 'nullable', 'string', new Cpf],
             'fcm_token' => 'sometimes|nullable|string',
         ]);
+
+        // Strip CPF formatting before storing (keep only digits)
+        if (isset($validated['cpf']) && $validated['cpf']) {
+            $validated['cpf'] = preg_replace('/\D/', '', $validated['cpf']);
+        }
 
         $user->update($validated);
 

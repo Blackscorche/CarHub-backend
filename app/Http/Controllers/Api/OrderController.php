@@ -216,9 +216,8 @@ class OrderController extends Controller
                     ->latest()
                     ->first();
 
-                $pixData = $existingPix
-                    ? ($existingPix->gateway_response['charges'][0]['last_transaction'] ?? [])
-                    : [];
+                $charge = $existingPix ? ($existingPix->gateway_response['charges'][0] ?? []) : [];
+                $pixData = $charge['last_transaction'] ?? $charge['transactions'][0] ?? [];
                 $hasValidQr = !empty($pixData['qr_code']);
 
                 if ($existingPix && $hasValidQr) {

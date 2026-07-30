@@ -67,7 +67,7 @@ class InvoiceController extends Controller
         }
 
         if (!$order->invoice_url) {
-            return $this->notFound('Nota fiscal não encontrada.');
+            return $this->success(['invoice_url' => null]);
         }
 
         return $this->success(['invoice_url' => $order->invoice_url]);

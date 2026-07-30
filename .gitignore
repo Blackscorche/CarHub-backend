@@ -74,3 +74,13 @@ coverage/
 id_rsa
 id_ed25519
 *.ppk
+*serviceAccount*.json
+google-services.json
+GoogleService-Info.plist
+*.keystore
+*.jks
+.dart_tool/
+.vs/
+bin/
+obj/
+.expo/
